@@ -5367,7 +5367,10 @@ def upload_file():
                 'grade': grade,
                 'finish': finish,
                 'scrap_factor': scrap_factor,
-                'material_config': material_config
+                'material_config': material_config,
+                # Add nesting data fields
+                'meaningful_parts': meaningful_parts,  # Raw part entities for nesting
+                'extracted_part_labels': extracted_part_labels or {}  # Original extracted labels
             })
             
         except Exception as e:
@@ -7477,30 +7480,61 @@ def calculate_nesting_with_existing_quantities():
         # Get data that your system already provides
         meaningful_parts = data.get('meaningful_parts', [])
         extracted_labels = data.get('extracted_part_labels', {})
+        part_images = data.get('part_images', [])
         scrap_threshold = data.get('scrap_threshold', 0.20)  # 20% default
         selected_material = data.get('material_name', 'Steel')
         selected_thickness = data.get('thickness_mm', 1.0)
         
-        if not meaningful_parts:
-            return jsonify({'error': 'No parts data provided'}), 400
+        # Check if we have either raw parts data or part images data
+        if not meaningful_parts and not part_images:
+            return jsonify({'error': 'No parts data provided. Please upload a DXF file first.'}), 400
         
         # Extract quantities from your existing system
         parts_with_quantities = []
-        for idx, part in enumerate(meaningful_parts, start=1):
-            label_data = extracted_labels.get(idx, {})
-            quantity = label_data.get('quantity', 1)  # Default to 1 if not found
-            if quantity is None or quantity <= 0:
-                quantity = 1
-            
-            # Use your existing _compute_part_bbox function
-            bbox = _compute_part_bbox(part)
-            
-            parts_with_quantities.append({
-                'part_index': idx,
-                'entities': part,
-                'quantity': int(quantity),
-                'bbox': bbox
-            })
+        
+        if meaningful_parts:
+            # Use raw parts data (preferred)
+            for idx, part in enumerate(meaningful_parts, start=1):
+                label_data = extracted_labels.get(idx, {}) or extracted_labels.get(str(idx), {})
+                quantity = label_data.get('quantity', 1)  # Default to 1 if not found
+                if quantity is None or quantity <= 0:
+                    quantity = 1
+                
+                # Use your existing _compute_part_bbox function
+                bbox = _compute_part_bbox(part)
+                
+                parts_with_quantities.append({
+                    'part_index': idx,
+                    'entities': part,
+                    'quantity': int(quantity),
+                    'bbox': bbox
+                })
+        else:
+            # Fallback: use part_images data to create simplified parts
+            for part_image in part_images:
+                part_number = part_image.get('part_number', 1)
+                
+                # Try to get quantity from extracted labels or from part_image itself
+                label_data = extracted_labels.get(part_number, {}) or extracted_labels.get(str(part_number), {})
+                quantity = label_data.get('quantity', 1)
+                if quantity is None or quantity <= 0:
+                    quantity = 1
+                
+                # Use dimensions from part_image if available
+                length_mm = part_image.get('length_mm', 0)
+                width_mm = part_image.get('width_mm', 0)
+                if length_mm > 0 and width_mm > 0:
+                    bbox = (0, 0, length_mm, width_mm)
+                else:
+                    bbox = (0, 0, 100, 100)  # Default 100x100mm
+                
+                parts_with_quantities.append({
+                    'part_index': part_number,
+                    'entities': [],  # No raw entities available
+                    'quantity': int(quantity),
+                    'bbox': bbox,
+                    'from_part_images': True
+                })
         
         print(f"[NESTING] Processing {len(parts_with_quantities)} parts with total quantities: {sum(p['quantity'] for p in parts_with_quantities)}")
         

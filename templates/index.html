@@ -4980,8 +4980,14 @@
                 }
 
                 // Check if we have processed DXF data
-                if (!window.currentData || !window.currentData.meaningful_parts) {
+                if (!window.currentData) {
                     showError('Please upload and process a DXF file first.');
+                    return;
+                }
+
+                // Check if we have the required data for nesting
+                if (!window.currentData.meaningful_parts && !window.currentData.part_images) {
+                    showError('No parts data available for nesting. Please upload a single DXF file first.');
                     return;
                 }
 
@@ -4991,20 +4997,28 @@
                 const selectedMaterial = materialSelect ? materialSelect.value : 'Steel';
                 const selectedThickness = thicknessSelect ? parseFloat(thicknessSelect.value) : 1.0;
 
+                // Use the available data structure
+                const partsData = window.currentData.meaningful_parts || [];
+                const labelsData = window.currentData.extracted_part_labels || window.currentData.part_labels || {};
+                
                 console.log('[NESTING] Starting calculation with:', {
-                    parts: window.currentData.meaningful_parts.length,
-                    labels: Object.keys(window.currentData.extracted_part_labels || {}).length,
+                    parts: partsData.length,
+                    labels: Object.keys(labelsData).length,
                     material: selectedMaterial,
-                    thickness: selectedThickness
+                    thickness: selectedThickness,
+                    hasRawParts: !!window.currentData.meaningful_parts,
+                    hasPartImages: !!window.currentData.part_images
                 });
 
                 // Prepare nesting request
                 const requestData = {
-                    meaningful_parts: window.currentData.meaningful_parts,
-                    extracted_part_labels: window.currentData.extracted_part_labels || {},
+                    meaningful_parts: partsData,
+                    extracted_part_labels: labelsData,
                     scrap_threshold: 0.20, // 20% threshold
                     material_name: selectedMaterial,
-                    thickness_mm: selectedThickness
+                    thickness_mm: selectedThickness,
+                    // Fallback data if meaningful_parts is not available
+                    part_images: window.currentData.part_images || []
                 };
 
                 const response = await fetch('/api/nesting/calculate', {
