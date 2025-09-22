@@ -164,11 +164,8 @@ def load_admin_config():
     try:
         if os.path.exists(CONFIG_FILE):
             with open(CONFIG_FILE, 'r') as f:
-                config = json.load(f)
-                for key, default_value in DEFAULT_CONFIG.items():
-                    if key not in config:
-                        config[key] = default_value
-                return config
+                cfg = json.load(f)
+            return _merge_defaults_with_config(DEFAULT_CONFIG, cfg)
         else:
             save_admin_config(DEFAULT_CONFIG)
             return DEFAULT_CONFIG
@@ -7004,10 +7001,274 @@ def get_placeholder_fields_route():
     except Exception as e:
         print(f"[boards] intelligent selection failed: {e}")
         return []
-# API nest route removed - will be replaced with new implementation
+# ============================================================================
+# NESTING FUNCTIONALITY - SVGNest Integration
+# ============================================================================
 
+import subprocess
+import tempfile
+import xml.etree.ElementTree as ET
+from xml.dom import minidom
+import math
 
-# Nesting functionality removed for deployment
+# Nesting configuration with defaults (all measurements in mm)
+DEFAULT_NESTING_CONFIG = {
+    'min_part_gap_mm': 5.0,
+    'kerf_mm': 0.2,
+    'rotation_step_deg': 90,
+    'allow_rotation': True,
+    'allow_mirroring': False,
+    'cluster_same_parts': True,
+    'min_bridge_width_mm': 1.0,
+    'sheet_margin_mm': {'top': 5.0, 'right': 5.0, 'bottom': 5.0, 'left': 5.0},
+}
+
+# Ensure nesting config is in main config
+DEFAULT_CONFIG.setdefault('nesting', DEFAULT_NESTING_CONFIG)
+
+def _merge_defaults_with_config(defaults: dict, cfg: dict) -> dict:
+    """Deep-merge defaults into cfg without losing existing values."""
+    out = dict(cfg or {})
+    for k, v in defaults.items():
+        if isinstance(v, dict):
+            out[k] = _merge_defaults_with_config(v, out.get(k, {}))
+        else:
+            out.setdefault(k, v)
+    return out
+
+def _validate_nesting_config(data: dict) -> dict:
+    """Sanitize and validate nesting config, all lengths in mm."""
+    out = {}
+    def _f(key, min_val=0.0, max_val=None):
+        if key in data and data[key] is not None:
+            try:
+                val = float(data[key])
+                if val < min_val: val = min_val
+                if max_val is not None and val > max_val: val = max_val
+                out[key] = val
+            except Exception:
+                pass
+
+    _f('min_part_gap_mm', 0.0, 100.0)
+    _f('kerf_mm', 0.0, 50.0)
+    _f('rotation_step_deg', 1.0, 360.0)
+    _f('min_bridge_width_mm', 0.0, 1000.0)
+
+    for b in ['allow_rotation', 'allow_mirroring', 'cluster_same_parts']:
+        if b in data:
+            out[b] = bool(data[b])
+
+    if 'sheet_margin_mm' in data and isinstance(data['sheet_margin_mm'], dict):
+        sm = data['sheet_margin_mm']
+        out['sheet_margin_mm'] = {
+            'top': max(0.0, float(sm.get('top', 5.0))),
+            'right': max(0.0, float(sm.get('right', 5.0))),
+            'bottom': max(0.0, float(sm.get('bottom', 5.0))),
+            'left': max(0.0, float(sm.get('left', 5.0))),
+        }
+
+    return out
+
+@app.route('/api/nesting/config', methods=['GET'])
+def api_get_nesting_config():
+    """Get current nesting configuration"""
+    cfg = load_admin_config()
+    return jsonify(cfg.get('nesting', DEFAULT_NESTING_CONFIG))
+
+@app.route('/api/nesting/config', methods=['POST', 'PUT'])
+def api_update_nesting_config():
+    """Update nesting configuration (admin only)"""
+    if not is_admin_logged_in():
+        return jsonify({'error': 'Not authorized'}), 401
+    try:
+        incoming = request.get_json(silent=True) or {}
+        sanitized = _validate_nesting_config(incoming)
+
+        cfg = load_admin_config()
+        cfg['nesting'] = _merge_defaults_with_config(
+            DEFAULT_NESTING_CONFIG,
+            {**cfg.get('nesting', {}), **sanitized}
+        )
+        if save_admin_config(cfg):
+            return jsonify({'success': True, 'nesting': cfg['nesting']})
+        return jsonify({'error': 'Failed to save configuration'}), 500
+    except Exception as e:
+        return jsonify({'error': f'Invalid configuration: {str(e)}'}), 400
+
+def get_board_specs_from_db():
+    """Get available boards from database"""
+    try:
+        from DatabaseConfig import get_db
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT "Material Name", "Grade", "Finish", "Thickness", "Price per kg"
+            FROM materials 
+            WHERE "Thickness" > 0
+            ORDER BY "Material Name", "Thickness"
+        """)
+        
+        boards = []
+        # Standard sheet sizes in mm for different materials
+        standard_sizes = [
+            {'width_mm': 1000, 'height_mm': 2000, 'cost_per_sheet': 100},
+            {'width_mm': 1250, 'height_mm': 2500, 'cost_per_sheet': 150},
+            {'width_mm': 1500, 'height_mm': 3000, 'cost_per_sheet': 200},
+            {'width_mm': 2000, 'height_mm': 4000, 'cost_per_sheet': 300},
+        ]
+        
+        board_id = 1
+        for row in cursor.fetchall():
+            material_name = row[0]
+            thickness = float(row[3])
+            
+            # Create board specs for each standard size
+            for size in standard_sizes:
+                boards.append({
+                    'id': board_id,
+                    'material_name': material_name,
+                    'thickness_mm': thickness,
+                    'width_mm': size['width_mm'],
+                    'height_mm': size['height_mm'],
+                    'cost_per_sheet': size['cost_per_sheet'],
+                    'area_mm2': size['width_mm'] * size['height_mm']
+                })
+                board_id += 1
+        
+        return boards
+    except Exception as e:
+        print(f"Database error getting board specs: {e}")
+        # Fallback to default boards
+        return [
+            {'id': 1, 'material_name': 'Steel', 'thickness_mm': 1.0, 'width_mm': 1000, 'height_mm': 2000, 'cost_per_sheet': 100, 'area_mm2': 2000000},
+            {'id': 2, 'material_name': 'Steel', 'thickness_mm': 1.0, 'width_mm': 1250, 'height_mm': 2500, 'cost_per_sheet': 150, 'area_mm2': 3125000},
+        ]
+
+def entity_to_svg_path(entity):
+    """Convert DXF entity to SVG path string"""
+    try:
+        entity_type = entity.dxftype()
+        
+        if entity_type == 'LINE':
+            start = entity.dxf.start
+            end = entity.dxf.end
+            return f"M {start.x},{start.y} L {end.x},{end.y}"
+        
+        elif entity_type == 'CIRCLE':
+            center = entity.dxf.center
+            radius = entity.dxf.radius
+            # Convert circle to SVG path using arcs
+            return f"M {center.x-radius},{center.y} A {radius},{radius} 0 1,0 {center.x+radius},{center.y} A {radius},{radius} 0 1,0 {center.x-radius},{center.y} Z"
+        
+        elif entity_type == 'ARC':
+            center = entity.dxf.center
+            radius = entity.dxf.radius
+            start_angle = math.radians(entity.dxf.start_angle)
+            end_angle = math.radians(entity.dxf.end_angle)
+            
+            start_x = center.x + radius * math.cos(start_angle)
+            start_y = center.y + radius * math.sin(start_angle)
+            end_x = center.x + radius * math.cos(end_angle)
+            end_y = center.y + radius * math.sin(end_angle)
+            
+            large_arc = 1 if (end_angle - start_angle) > math.pi else 0
+            return f"M {start_x},{start_y} A {radius},{radius} 0 {large_arc},1 {end_x},{end_y}"
+        
+        elif entity_type in ['LWPOLYLINE', 'POLYLINE']:
+            if hasattr(entity, 'vertices'):
+                vertices = list(entity.vertices)
+            elif hasattr(entity, 'get_points'):
+                vertices = list(entity.get_points())
+            else:
+                return None
+            
+            if not vertices:
+                return None
+            
+            path = f"M {vertices[0][0]},{vertices[0][1]}"
+            for vertex in vertices[1:]:
+                path += f" L {vertex[0]},{vertex[1]}"
+            
+            if entity.is_closed:
+                path += " Z"
+            
+            return path
+        
+        elif entity_type == 'SPLINE':
+            # Simplified spline to polyline conversion
+            if hasattr(entity, 'flattening'):
+                points = list(entity.flattening(0.1))  # 0.1mm tolerance
+                if points:
+                    path = f"M {points[0][0]},{points[0][1]}"
+                    for point in points[1:]:
+                        path += f" L {point[0]},{point[1]}"
+                    return path
+        
+        return None
+    except Exception as e:
+        print(f"Error converting entity {entity_type} to SVG: {e}")
+        return None
+
+def _compute_part_bbox(part_entities):
+    """Compute bounding box for a part (global function for nesting)"""
+    try:
+        xs = []
+        ys = []
+        for ent in part_entities:
+            if hasattr(ent, 'dxf'):
+                if hasattr(ent.dxf, 'start') and hasattr(ent.dxf, 'end'):
+                    xs.extend([ent.dxf.start.x, ent.dxf.end.x])
+                    ys.extend([ent.dxf.start.y, ent.dxf.end.y])
+                elif ent.dxftype() == 'CIRCLE':
+                    c = ent.dxf.center; r = ent.dxf.radius
+                    xs.extend([c.x - r, c.x + r]); ys.extend([c.y - r, c.y + r])
+                elif ent.dxftype() == 'ARC':
+                    c = ent.dxf.center; r = ent.dxf.radius
+                    xs.extend([c.x - r, c.x + r]); ys.extend([c.y - r, c.y + r])
+                elif ent.dxftype() in ['LWPOLYLINE', 'POLYLINE']:
+                    try:
+                        pts = list(ent.get_points())
+                        if pts:
+                            xs.extend([p[0] for p in pts]); ys.extend([p[1] for p in pts])
+                    except Exception:
+                        pass
+        if xs and ys:
+            return (min(xs), min(ys), max(xs), max(ys))
+    except Exception as e:
+        print(f"Error computing bbox: {e}")
+    return (0.0, 0.0, 0.0, 0.0)
+
+def convert_dxf_parts_to_svg(parts_with_quantities):
+    """Convert extracted DXF parts to SVG format for nesting"""
+    svg_parts = []
+    
+    for part_data in parts_with_quantities:
+        part_entities = part_data['entities']
+        quantity = part_data['quantity']
+        part_index = part_data['part_index']
+        
+        # Collect all SVG paths for this part
+        part_paths = []
+        for entity in part_entities:
+            svg_path = entity_to_svg_path(entity)
+            if svg_path:
+                part_paths.append(svg_path)
+        
+        if part_paths:
+            # Combine all paths into a single SVG group
+            combined_path = " ".join(part_paths)
+            
+            # Create multiple instances based on quantity
+            for i in range(quantity):
+                svg_parts.append({
+                    'path': combined_path,
+                    'part_id': part_index,
+                    'instance': i + 1,
+                    'bbox': part_data.get('bbox')
+                })
+    
+    return svg_parts
 
 @app.route('/api/scrap/calculate', methods=['POST'])
 def calculate_scrap_ai():
@@ -7070,6 +7331,233 @@ def calculate_scrap_ai():
             })
             
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def calculate_part_area_from_bbox(bbox):
+    """Calculate part area from bounding box"""
+    if not bbox or len(bbox) != 4:
+        return 0.0
+    return abs((bbox[2] - bbox[0]) * (bbox[3] - bbox[1]))
+
+def run_svgnest_algorithm(svg_parts, board_specs, nesting_config):
+    """Run simplified nesting algorithm (placeholder for SVGNest integration)"""
+    try:
+        board_width = board_specs['width_mm']
+        board_height = board_specs['height_mm']
+        board_area = board_width * board_height
+        margin = nesting_config.get('sheet_margin_mm', {'top': 5, 'right': 5, 'bottom': 5, 'left': 5})
+        gap = nesting_config.get('min_part_gap_mm', 5.0)
+        
+        # Available nesting area
+        available_width = board_width - margin['left'] - margin['right']
+        available_height = board_height - margin['top'] - margin['bottom']
+        available_area = available_width * available_height
+        
+        # Simple grid-based nesting simulation
+        nested_parts = []
+        current_x = margin['left']
+        current_y = margin['top']
+        row_height = 0
+        total_used_area = 0
+        
+        for part in svg_parts:
+            bbox = part.get('bbox')
+            if not bbox:
+                continue
+            
+            part_width = abs(bbox[2] - bbox[0])
+            part_height = abs(bbox[3] - bbox[1])
+            part_area = part_width * part_height
+            
+            # Check if part fits in current position
+            if current_x + part_width <= board_width - margin['right']:
+                # Part fits horizontally
+                nested_parts.append({
+                    'part_id': part['part_id'],
+                    'instance': part['instance'],
+                    'x': current_x,
+                    'y': current_y,
+                    'width': part_width,
+                    'height': part_height,
+                    'area': part_area
+                })
+                
+                current_x += part_width + gap
+                row_height = max(row_height, part_height)
+                total_used_area += part_area
+                
+            elif current_y + row_height + gap + part_height <= board_height - margin['bottom']:
+                # Move to next row
+                current_x = margin['left']
+                current_y += row_height + gap
+                row_height = part_height
+                
+                nested_parts.append({
+                    'part_id': part['part_id'],
+                    'instance': part['instance'],
+                    'x': current_x,
+                    'y': current_y,
+                    'width': part_width,
+                    'height': part_height,
+                    'area': part_area
+                })
+                
+                current_x += part_width + gap
+                total_used_area += part_area
+            
+            # If part doesn't fit, skip it (would need multiple sheets)
+        
+        utilization = total_used_area / available_area if available_area > 0 else 0
+        
+        return {
+            'parts': nested_parts,
+            'utilization': utilization,
+            'used_area_mm2': total_used_area,
+            'available_area_mm2': available_area,
+            'board_area_mm2': board_area,
+            'parts_fitted': len(nested_parts),
+            'parts_total': len(svg_parts)
+        }
+        
+    except Exception as e:
+        print(f"Nesting algorithm error: {e}")
+        return {
+            'parts': [],
+            'utilization': 0.0,
+            'used_area_mm2': 0.0,
+            'available_area_mm2': 0.0,
+            'board_area_mm2': 0.0,
+            'parts_fitted': 0,
+            'parts_total': len(svg_parts)
+        }
+
+def process_nesting_with_svgnest(parts_with_quantities, board_specs, scrap_threshold, nesting_config):
+    """Process nesting using existing quantity data"""
+    
+    # Convert parts to SVG format
+    svg_parts = convert_dxf_parts_to_svg(parts_with_quantities)
+    
+    # Run nesting algorithm
+    nested_result = run_svgnest_algorithm(svg_parts, board_specs, nesting_config)
+    
+    # Calculate scrap based on rules
+    total_board_area = board_specs['width_mm'] * board_specs['height_mm']
+    used_area = nested_result['used_area_mm2']
+    unused_area = total_board_area - used_area
+    unused_percentage = unused_area / total_board_area if total_board_area > 0 else 0
+    
+    # Rule: if unused < threshold%, it's leftover; otherwise scrap
+    if unused_percentage < scrap_threshold:
+        scrap_percentage = 0.0
+        leftover_parts = [{'area_mm2': unused_area, 'type': 'leftover', 'percentage': unused_percentage}]
+        scrap_parts = []
+    else:
+        scrap_percentage = unused_percentage
+        leftover_parts = []
+        scrap_parts = [{'area_mm2': unused_area, 'type': 'scrap', 'percentage': unused_percentage}]
+    
+    return {
+        'board': board_specs,
+        'nested_parts': nested_result['parts'],
+        'utilization': nested_result['utilization'],
+        'scrap_percentage': scrap_percentage,
+        'leftover_parts': leftover_parts,
+        'scrap_parts': scrap_parts,
+        'total_parts_nested': nested_result['parts_fitted'],
+        'total_parts_required': nested_result['parts_total'],
+        'fitting_success': nested_result['parts_fitted'] == nested_result['parts_total']
+    }
+
+@app.route('/api/nesting/calculate', methods=['POST'])
+def calculate_nesting_with_existing_quantities():
+    """Calculate nesting using existing DXF quantity data"""
+    try:
+        data = request.get_json()
+        
+        # Get data that your system already provides
+        meaningful_parts = data.get('meaningful_parts', [])
+        extracted_labels = data.get('extracted_part_labels', {})
+        scrap_threshold = data.get('scrap_threshold', 0.20)  # 20% default
+        selected_material = data.get('material_name', 'Steel')
+        selected_thickness = data.get('thickness_mm', 1.0)
+        
+        if not meaningful_parts:
+            return jsonify({'error': 'No parts data provided'}), 400
+        
+        # Extract quantities from your existing system
+        parts_with_quantities = []
+        for idx, part in enumerate(meaningful_parts, start=1):
+            label_data = extracted_labels.get(idx, {})
+            quantity = label_data.get('quantity', 1)  # Default to 1 if not found
+            if quantity is None or quantity <= 0:
+                quantity = 1
+            
+            # Use your existing _compute_part_bbox function
+            bbox = _compute_part_bbox(part)
+            
+            parts_with_quantities.append({
+                'part_index': idx,
+                'entities': part,
+                'quantity': int(quantity),
+                'bbox': bbox
+            })
+        
+        print(f"[NESTING] Processing {len(parts_with_quantities)} parts with total quantities: {sum(p['quantity'] for p in parts_with_quantities)}")
+        
+        # Get board specs from database, filtered by material and thickness
+        all_boards = get_board_specs_from_db()
+        filtered_boards = [
+            board for board in all_boards 
+            if board['material_name'].lower() == selected_material.lower() 
+            and abs(board['thickness_mm'] - selected_thickness) < 0.1
+        ]
+        
+        # If no exact match, use all boards
+        if not filtered_boards:
+            filtered_boards = all_boards[:4]  # Use first 4 boards as fallback
+        
+        # Get nesting configuration
+        nesting_config = load_admin_config().get('nesting', DEFAULT_NESTING_CONFIG)
+        
+        # Process with each board size
+        nesting_results = []
+        for board in filtered_boards:
+            result = process_nesting_with_svgnest(
+                parts_with_quantities, 
+                board, 
+                scrap_threshold,
+                nesting_config
+            )
+            nesting_results.append(result)
+        
+        # Find best board (lowest scrap percentage, then highest utilization)
+        best_board = None
+        if nesting_results:
+            # First, prefer boards that fit all parts
+            complete_fits = [r for r in nesting_results if r['fitting_success']]
+            if complete_fits:
+                best_board = min(complete_fits, key=lambda x: (x['scrap_percentage'], -x['utilization']))
+            else:
+                # If no complete fit, choose best partial fit
+                best_board = max(nesting_results, key=lambda x: (x['total_parts_nested'], x['utilization']))
+        
+        return jsonify({
+            'success': True,
+            'results': nesting_results,
+            'best_board': best_board,
+            'parts_summary': {
+                'total_parts': len(parts_with_quantities),
+                'total_instances': sum(p['quantity'] for p in parts_with_quantities),
+                'material': selected_material,
+                'thickness_mm': selected_thickness
+            },
+            'config_used': nesting_config
+        })
+        
+    except Exception as e:
+        print(f"Nesting calculation error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 

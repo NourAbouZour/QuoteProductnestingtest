@@ -1987,7 +1987,7 @@
                     </div> -->
                     <div class="scrap-actions">
                         <button type="button" class="scrap-btn" id="calcQuoteBtn" onclick="calculateQuote()">Calculate Quote</button>
-                        <!-- <button type="button" class="scrap-btn" id="nestMetricsBtn">Nest &amp; Calculate Scrap</button> -->
+                        <button type="button" class="scrap-btn" id="nestMetricsBtn">🔧 Calculate Nesting &amp; Scrap</button>
                     </div>
                 </div>
                 
@@ -4973,43 +4973,291 @@
         // Nest & Metrics handler
         async function nestAndMetrics() {
             try {
-                const fileInput = document.getElementById('fileInput');
-                const multiInput = document.getElementById('multiFilesInput');
-                let file = null;
-                if (fileInput && fileInput.files && fileInput.files.length > 0) {
-                    file = fileInput.files[0];
-                } else if (multiInput && multiInput.files && multiInput.files.length > 0) {
-                    file = multiInput.files[0];
-                } else if (window.__multiFiles && window.__multiFiles.size > 0) {
-                    file = Array.from(window.__multiFiles)[0];
+                const btn = document.getElementById('nestMetricsBtn');
+                if (btn) { 
+                    btn.disabled = true; 
+                    btn.textContent = '🔄 Calculating...'; 
                 }
-                if (!file) {
-                    showError('Please select a DXF file first.');
+
+                // Check if we have processed DXF data
+                if (!window.currentData || !window.currentData.meaningful_parts) {
+                    showError('Please upload and process a DXF file first.');
                     return;
                 }
 
-                // Nesting functionality removed for deployment
+                // Get current material selection
+                const materialSelect = document.getElementById('material');
+                const thicknessSelect = document.getElementById('thickness');
+                const selectedMaterial = materialSelect ? materialSelect.value : 'Steel';
+                const selectedThickness = thicknessSelect ? parseFloat(thicknessSelect.value) : 1.0;
 
-                const fd = new FormData();
-                fd.append('dxf', file, file.name);
-                fd.append('quantities_from_text', JSON.stringify({ default: 1 }));
-                fd.append('boards', JSON.stringify([]));
-                fd.append('leftover_threshold', '0.2');
-                fd.append('stats_only', 'true');
+                console.log('[NESTING] Starting calculation with:', {
+                    parts: window.currentData.meaningful_parts.length,
+                    labels: Object.keys(window.currentData.extracted_part_labels || {}).length,
+                    material: selectedMaterial,
+                    thickness: selectedThickness
+                });
 
-                const resp = await fetch('/api/nest-and-metrics', { method: 'POST', body: fd });
-                if (!resp.ok) {
-                    const t = await resp.text();
-                    throw new Error(t || 'Nest API failed');
+                // Prepare nesting request
+                const requestData = {
+                    meaningful_parts: window.currentData.meaningful_parts,
+                    extracted_part_labels: window.currentData.extracted_part_labels || {},
+                    scrap_threshold: 0.20, // 20% threshold
+                    material_name: selectedMaterial,
+                    thickness_mm: selectedThickness
+                };
+
+                const response = await fetch('/api/nesting/calculate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server error: ${errorText}`);
                 }
-                const data = await resp.json();
-                showSuccess(`Scrap calculation complete. Scrap factor: ${Number(data.scrap_factor).toFixed(4)}`);
+
+                const result = await response.json();
+                console.log('[NESTING] Results received:', result);
+
+                // Display results
+                displayNestingResults(result);
+                showSuccess('Nesting calculation completed successfully!');
+
             } catch (err) {
-                console.error(err);
-                showError(`Failed to nest and compute metrics: ${err.message || err}`);
+                console.error('[NESTING] Error:', err);
+                showError(`Failed to calculate nesting: ${err.message || err}`);
             } finally {
                 const btn = document.getElementById('nestMetricsBtn');
-                if (btn) { btn.disabled = false; btn.textContent = 'Nest & Calculate Scrap'; }
+                if (btn) { 
+                    btn.disabled = false; 
+                    btn.textContent = '🔧 Calculate Nesting & Scrap'; 
+                }
+            }
+        }
+
+        function displayNestingResults(result) {
+            // Create or update nesting results display
+            let resultsDiv = document.getElementById('nestingResults');
+            if (!resultsDiv) {
+                resultsDiv = document.createElement('div');
+                resultsDiv.id = 'nestingResults';
+                resultsDiv.className = 'nesting-results';
+                
+                // Insert after the scrap section
+                const scrapSection = document.querySelector('.scrap-section');
+                if (scrapSection) {
+                    scrapSection.parentNode.insertBefore(resultsDiv, scrapSection.nextSibling);
+                } else {
+                    document.querySelector('.upload-section').appendChild(resultsDiv);
+                }
+            }
+
+            const bestBoard = result.best_board;
+            const summary = result.parts_summary;
+
+            resultsDiv.innerHTML = `
+                <h3>🔧 Nesting Results</h3>
+                <div class="nesting-summary">
+                    <div class="summary-item">
+                        <label>Material:</label>
+                        <span>${summary.material} (${summary.thickness_mm}mm)</span>
+                    </div>
+                    <div class="summary-item">
+                        <label>Parts to nest:</label>
+                        <span>${summary.total_parts} unique parts, ${summary.total_instances} total pieces</span>
+                    </div>
+                </div>
+
+                ${bestBoard ? `
+                <div class="best-board">
+                    <h4>🏆 Recommended Board</h4>
+                    <div class="board-details">
+                        <div class="board-info">
+                            <span class="board-size">${bestBoard.board.width_mm} × ${bestBoard.board.height_mm} mm</span>
+                            <span class="board-cost">$${bestBoard.board.cost_per_sheet}/sheet</span>
+                        </div>
+                        <div class="utilization-info">
+                            <div class="utilization-bar">
+                                <div class="utilization-fill" style="width: ${(bestBoard.utilization * 100).toFixed(1)}%"></div>
+                            </div>
+                            <span class="utilization-text">${(bestBoard.utilization * 100).toFixed(1)}% utilization</span>
+                        </div>
+                        <div class="parts-fitted">
+                            <span class="${bestBoard.fitting_success ? 'success' : 'warning'}">
+                                ${bestBoard.total_parts_nested}/${bestBoard.total_parts_required} parts fit
+                                ${bestBoard.fitting_success ? '✅' : '⚠️'}
+                            </span>
+                        </div>
+                        <div class="scrap-info">
+                            ${bestBoard.scrap_percentage > 0 ? 
+                                `<span class="scrap">Scrap: ${(bestBoard.scrap_percentage * 100).toFixed(1)}%</span>` :
+                                `<span class="leftover">Leftover: ${bestBoard.leftover_parts.length > 0 ? (bestBoard.leftover_parts[0].percentage * 100).toFixed(1) + '%' : '0%'}</span>`
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="all-options">
+                    <h4>All Board Options</h4>
+                    <div class="board-options">
+                        ${result.results.map((option, index) => `
+                            <div class="board-option ${option === bestBoard ? 'recommended' : ''}">
+                                <div class="option-header">
+                                    <span class="option-size">${option.board.width_mm} × ${option.board.height_mm} mm</span>
+                                    <span class="option-cost">$${option.board.cost_per_sheet}</span>
+                                    ${option === bestBoard ? '<span class="recommended-badge">RECOMMENDED</span>' : ''}
+                                </div>
+                                <div class="option-details">
+                                    <span>Utilization: ${(option.utilization * 100).toFixed(1)}%</span>
+                                    <span>Parts: ${option.total_parts_nested}/${option.total_parts_required}</span>
+                                    <span>
+                                        ${option.scrap_percentage > 0 ? 
+                                            `Scrap: ${(option.scrap_percentage * 100).toFixed(1)}%` :
+                                            `Leftover: ${option.leftover_parts.length > 0 ? (option.leftover_parts[0].percentage * 100).toFixed(1) + '%' : '0%'}`
+                                        }
+                                    </span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : '<div class="no-results">No suitable boards found for nesting.</div>'}
+            `;
+
+            // Add CSS styles if not already added
+            if (!document.getElementById('nestingStyles')) {
+                const style = document.createElement('style');
+                style.id = 'nestingStyles';
+                style.textContent = `
+                    .nesting-results {
+                        margin: 20px 0;
+                        padding: 20px;
+                        background: #f8f9fa;
+                        border-radius: 8px;
+                        border: 1px solid #dee2e6;
+                    }
+                    .nesting-summary {
+                        margin-bottom: 15px;
+                    }
+                    .summary-item {
+                        display: flex;
+                        justify-content: space-between;
+                        margin-bottom: 5px;
+                    }
+                    .summary-item label {
+                        font-weight: bold;
+                        color: #495057;
+                    }
+                    .best-board {
+                        margin: 15px 0;
+                        padding: 15px;
+                        background: white;
+                        border-radius: 6px;
+                        border: 2px solid #28a745;
+                    }
+                    .board-details {
+                        margin-top: 10px;
+                    }
+                    .board-info {
+                        display: flex;
+                        justify-content: space-between;
+                        margin-bottom: 10px;
+                    }
+                    .board-size {
+                        font-weight: bold;
+                        font-size: 1.1em;
+                    }
+                    .board-cost {
+                        color: #28a745;
+                        font-weight: bold;
+                    }
+                    .utilization-info {
+                        margin-bottom: 10px;
+                    }
+                    .utilization-bar {
+                        width: 100%;
+                        height: 20px;
+                        background: #e9ecef;
+                        border-radius: 10px;
+                        overflow: hidden;
+                        margin-bottom: 5px;
+                    }
+                    .utilization-fill {
+                        height: 100%;
+                        background: linear-gradient(90deg, #28a745, #20c997);
+                        transition: width 0.3s ease;
+                    }
+                    .utilization-text {
+                        font-weight: bold;
+                        color: #495057;
+                    }
+                    .parts-fitted .success {
+                        color: #28a745;
+                        font-weight: bold;
+                    }
+                    .parts-fitted .warning {
+                        color: #ffc107;
+                        font-weight: bold;
+                    }
+                    .scrap-info .scrap {
+                        color: #dc3545;
+                        font-weight: bold;
+                    }
+                    .scrap-info .leftover {
+                        color: #17a2b8;
+                        font-weight: bold;
+                    }
+                    .board-options {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                        gap: 10px;
+                        margin-top: 10px;
+                    }
+                    .board-option {
+                        padding: 10px;
+                        background: white;
+                        border-radius: 4px;
+                        border: 1px solid #dee2e6;
+                    }
+                    .board-option.recommended {
+                        border-color: #28a745;
+                        background: #f8fff9;
+                    }
+                    .option-header {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-bottom: 5px;
+                    }
+                    .option-size {
+                        font-weight: bold;
+                    }
+                    .recommended-badge {
+                        background: #28a745;
+                        color: white;
+                        padding: 2px 6px;
+                        border-radius: 3px;
+                        font-size: 0.8em;
+                    }
+                    .option-details {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 3px;
+                        font-size: 0.9em;
+                        color: #6c757d;
+                    }
+                    .no-results {
+                        text-align: center;
+                        color: #6c757d;
+                        font-style: italic;
+                        padding: 20px;
+                    }
+                `;
+                document.head.appendChild(style);
             }
         }
 
