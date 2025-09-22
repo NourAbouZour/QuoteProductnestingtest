@@ -7099,53 +7099,59 @@ def api_update_nesting_config():
         return jsonify({'error': f'Invalid configuration: {str(e)}'}), 400
 
 def get_board_specs_from_db():
-    """Get available boards from database"""
+    """Get available boards from the actual boards table"""
     try:
-        from DatabaseConfig import get_db
-        conn = get_db()
-        cursor = conn.cursor()
+        from DatabaseConfig import engine
+        from sqlalchemy import text
         
-        cursor.execute("""
-            SELECT "Material Name", "Grade", "Finish", "Thickness", "Price per kg"
-            FROM materials 
-            WHERE "Thickness" > 0
-            ORDER BY "Material Name", "Thickness"
-        """)
+        conn = engine.connect()
+        
+        # Get actual boards from the boards table
+        result = conn.execute(text("""
+            SELECT id, name, length, width, quantity 
+            FROM boards 
+            WHERE quantity > 0
+            ORDER BY length * width DESC
+        """))
         
         boards = []
-        # Standard sheet sizes in mm for different materials
-        standard_sizes = [
-            {'width_mm': 1000, 'height_mm': 2000, 'cost_per_sheet': 100},
-            {'width_mm': 1250, 'height_mm': 2500, 'cost_per_sheet': 150},
-            {'width_mm': 1500, 'height_mm': 3000, 'cost_per_sheet': 200},
-            {'width_mm': 2000, 'height_mm': 4000, 'cost_per_sheet': 300},
-        ]
-        
-        board_id = 1
-        for row in cursor.fetchall():
-            material_name = row[0]
-            thickness = float(row[3])
+        for row in result.fetchall():
+            board_id, name, length, width, quantity = row
             
-            # Create board specs for each standard size
-            for size in standard_sizes:
-                boards.append({
-                    'id': board_id,
-                    'material_name': material_name,
-                    'thickness_mm': thickness,
-                    'width_mm': size['width_mm'],
-                    'height_mm': size['height_mm'],
-                    'cost_per_sheet': size['cost_per_sheet'],
-                    'area_mm2': size['width_mm'] * size['height_mm']
-                })
-                board_id += 1
+            # Convert to our expected format (length=height, width=width in our coordinate system)
+            boards.append({
+                'id': board_id,
+                'name': name,
+                'width_mm': float(width),
+                'height_mm': float(length),  # length becomes height in our nesting system
+                'quantity_available': int(quantity),
+                'cost_per_sheet': 100,  # Base cost - could be calculated based on area
+                'area_mm2': float(width * length)
+            })
+        
+        conn.close()
+        
+        # Add some cost calculation based on size
+        for board in boards:
+            area_m2 = board['area_mm2'] / 1000000  # Convert to square meters
+            board['cost_per_sheet'] = round(area_m2 * 50, 2)  # $50 per square meter base cost
+        
+        print(f"[BOARDS] Loaded {len(boards)} boards from database")
+        for b in boards:
+            print(f"  - {b['name']}: {b['width_mm']}x{b['height_mm']}mm, qty={b['quantity_available']}, cost=${b['cost_per_sheet']}")
         
         return boards
+        
     except Exception as e:
         print(f"Database error getting board specs: {e}")
+        import traceback
+        traceback.print_exc()
+        
         # Fallback to default boards
         return [
-            {'id': 1, 'material_name': 'Steel', 'thickness_mm': 1.0, 'width_mm': 1000, 'height_mm': 2000, 'cost_per_sheet': 100, 'area_mm2': 2000000},
-            {'id': 2, 'material_name': 'Steel', 'thickness_mm': 1.0, 'width_mm': 1250, 'height_mm': 2500, 'cost_per_sheet': 150, 'area_mm2': 3125000},
+            {'id': 1, 'name': 'Standard 1000x2000', 'width_mm': 1000, 'height_mm': 2000, 'quantity_available': 50, 'cost_per_sheet': 100, 'area_mm2': 2000000},
+            {'id': 2, 'name': 'Standard 1250x2500', 'width_mm': 1250, 'height_mm': 2500, 'quantity_available': 50, 'cost_per_sheet': 156, 'area_mm2': 3125000},
+            {'id': 3, 'name': 'Large 1500x3000', 'width_mm': 1500, 'height_mm': 3000, 'quantity_available': 30, 'cost_per_sheet': 225, 'area_mm2': 4500000},
         ]
 
 def entity_to_svg_path(entity):
@@ -7343,7 +7349,7 @@ def calculate_part_area_from_bbox(bbox):
     return abs((bbox[2] - bbox[0]) * (bbox[3] - bbox[1]))
 
 def run_svgnest_algorithm(svg_parts, board_specs, nesting_config):
-    """Run simplified nesting algorithm (placeholder for SVGNest integration)"""
+    """Run improved grid-based nesting algorithm"""
     try:
         board_width = board_specs['width_mm']
         board_height = board_specs['height_mm']
@@ -7351,30 +7357,60 @@ def run_svgnest_algorithm(svg_parts, board_specs, nesting_config):
         margin = nesting_config.get('sheet_margin_mm', {'top': 5, 'right': 5, 'bottom': 5, 'left': 5})
         gap = nesting_config.get('min_part_gap_mm', 5.0)
         
+        print(f"[NESTING] Board: {board_width}x{board_height}mm, Parts to nest: {len(svg_parts)}")
+        
         # Available nesting area
         available_width = board_width - margin['left'] - margin['right']
         available_height = board_height - margin['top'] - margin['bottom']
         available_area = available_width * available_height
         
-        # Simple grid-based nesting simulation
+        print(f"[NESTING] Available area: {available_width}x{available_height}mm = {available_area}mm²")
+        
+        # Validate and prepare parts
+        valid_parts = []
+        for part in svg_parts:
+            bbox = part.get('bbox')
+            if not bbox or len(bbox) != 4:
+                print(f"[NESTING] Skipping part {part.get('part_id')} - invalid bbox: {bbox}")
+                continue
+            
+            part_width = abs(bbox[2] - bbox[0])
+            part_height = abs(bbox[3] - bbox[1])
+            
+            # Skip zero-area parts
+            if part_width <= 0 or part_height <= 0:
+                print(f"[NESTING] Skipping part {part.get('part_id')} - zero dimensions: {part_width}x{part_height}")
+                continue
+            
+            valid_parts.append({
+                'part_id': part['part_id'],
+                'instance': part['instance'],
+                'width': part_width,
+                'height': part_height,
+                'area': part_width * part_height,
+                'bbox': bbox
+            })
+            
+        print(f"[NESTING] Valid parts: {len(valid_parts)}")
+        
+        # Sort parts by area (largest first) for better packing
+        valid_parts.sort(key=lambda p: p['area'], reverse=True)
+        
+        # Simple grid-based nesting
         nested_parts = []
         current_x = margin['left']
         current_y = margin['top']
         row_height = 0
         total_used_area = 0
         
-        for part in svg_parts:
-            bbox = part.get('bbox')
-            if not bbox:
-                continue
+        for part in valid_parts:
+            part_width = part['width']
+            part_height = part['height']
+            part_area = part['area']
             
-            part_width = abs(bbox[2] - bbox[0])
-            part_height = abs(bbox[3] - bbox[1])
-            part_area = part_width * part_height
-            
-            # Check if part fits in current position
+            # Check if part fits in current row
             if current_x + part_width <= board_width - margin['right']:
-                # Part fits horizontally
+                # Part fits horizontally in current row
                 nested_parts.append({
                     'part_id': part['part_id'],
                     'instance': part['instance'],
@@ -7388,6 +7424,8 @@ def run_svgnest_algorithm(svg_parts, board_specs, nesting_config):
                 current_x += part_width + gap
                 row_height = max(row_height, part_height)
                 total_used_area += part_area
+                
+                print(f"[NESTING] Placed part {part['part_id']}#{part['instance']} at ({current_x-part_width-gap:.1f}, {current_y:.1f}) size {part_width:.1f}x{part_height:.1f}")
                 
             elif current_y + row_height + gap + part_height <= board_height - margin['bottom']:
                 # Move to next row
@@ -7407,10 +7445,16 @@ def run_svgnest_algorithm(svg_parts, board_specs, nesting_config):
                 
                 current_x += part_width + gap
                 total_used_area += part_area
-            
-            # If part doesn't fit, skip it (would need multiple sheets)
+                
+                print(f"[NESTING] New row: Placed part {part['part_id']}#{part['instance']} at ({current_x-part_width-gap:.1f}, {current_y:.1f}) size {part_width:.1f}x{part_height:.1f}")
+                
+            else:
+                # Part doesn't fit on this sheet
+                print(f"[NESTING] Part {part['part_id']}#{part['instance']} doesn't fit - would need multiple sheets")
         
         utilization = total_used_area / available_area if available_area > 0 else 0
+        
+        print(f"[NESTING] Results: {len(nested_parts)}/{len(valid_parts)} parts fit, {total_used_area:.0f}mm² used, {utilization:.1%} utilization")
         
         return {
             'parts': nested_parts,
@@ -7419,11 +7463,13 @@ def run_svgnest_algorithm(svg_parts, board_specs, nesting_config):
             'available_area_mm2': available_area,
             'board_area_mm2': board_area,
             'parts_fitted': len(nested_parts),
-            'parts_total': len(svg_parts)
+            'parts_total': len(valid_parts)
         }
         
     except Exception as e:
         print(f"Nesting algorithm error: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             'parts': [],
             'utilization': 0.0,
