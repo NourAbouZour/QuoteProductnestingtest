@@ -7584,17 +7584,13 @@ def calculate_nesting_with_existing_quantities():
         
         print(f"[NESTING] Processing {len(parts_with_quantities)} parts with total quantities: {sum(p['quantity'] for p in parts_with_quantities)}")
         
-        # Get board specs from database, filtered by material and thickness
+        # Get board specs from database
         all_boards = get_board_specs_from_db()
-        filtered_boards = [
-            board for board in all_boards 
-            if board['material_name'].lower() == selected_material.lower() 
-            and abs(board['thickness_mm'] - selected_thickness) < 0.1
-        ]
         
-        # If no exact match, use all boards
-        if not filtered_boards:
-            filtered_boards = all_boards[:4]  # Use first 4 boards as fallback
+        # Since boards table doesn't have material/thickness info, use all available boards
+        filtered_boards = all_boards
+        
+        print(f"[NESTING] Using {len(filtered_boards)} boards for material '{selected_material}' ({selected_thickness}mm)")
         
         # Get nesting configuration
         nesting_config = load_admin_config().get('nesting', DEFAULT_NESTING_CONFIG)
