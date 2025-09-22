@@ -1,0 +1,58 @@
+# Core Web Framework
+Flask>=2.3.0
+Werkzeug>=2.3.0
+
+# HTTP requests
+requests>=2.31.0
+
+# DXF File Processing
+ezdxf>=1.1.0
+
+# Scientific Computing & Mathematics
+numpy>=1.21.0
+
+# Geometry Processing
+shapely>=1.8.0
+
+# File Handling & Utilities
+Pillow>=9.0.0
+
+# Computer Vision (optional - for enhanced line detection)
+opencv-python>=4.8.0
+
+# OCR (requested; not strictly required for DXF TEXT but available)
+pytesseract>=0.3.10
+
+# Matplotlib Dependencies (installed separately due to compilation issues)
+matplotlib>=3.5.0
+packaging>=20.0
+python-dateutil>=2.7
+cycler>=0.10
+contourpy>=1.0.1
+
+# Database (SQLite - built into Python, no compilation required)
+SQLAlchemy>=2.0.0
+
+# PDF Generation
+reportlab>=4.0.0
+jinja2>=3.0.0
+pydantic>=2.0.0
+
+# AI and Data Processing Dependencies
+numpy>=1.21.0
+scipy>=1.7.0
+openpyxl>=3.0.0
+aiohttp>=3.9.0
+scikit-learn>=1.4.0
+
+# Production Dependencies for Windows Server 2022
+psutil>=5.9.0
+gunicorn>=21.2.0
+psycopg2-binary>=2.9.0
+
+# PDF Generation Dependencies
+playwright>=1.40.0
+
+# Note: For PostgreSQL support, install Microsoft Visual C++ Build Tools first:
+# https://visualstudio.microsoft.com/visual-cpp-build-tools/
+# Then run: pip install psycopg2-binary 

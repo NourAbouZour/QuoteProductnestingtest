@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Materials Management</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #000000 0%, #ff6600 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .config-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 2px solid #e1e5e9;
+        }
+
+        .config-section h2 {
+            color: #333;
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ff6600;
+            padding-bottom: 10px;
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .config-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .config-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        .config-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .config-group input:focus {
+            outline: none;
+            border-color: #ff6600;
+        }
+
+        .toggle-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #ff6600;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .toggle-label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .save-config-btn {
+            background: linear-gradient(135deg, #000000 0%, #ff6600 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .save-config-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .config-message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .config-success {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .config-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .nav-button {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            padding: 12px 24px;
+            border-radius: 25px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .nav-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .actions-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .add-button {
+            background: linear-gradient(135deg, #000000 0%, #ff6600 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .add-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .search-input {
+            padding: 10px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 25px;
+            font-size: 14px;
+            min-width: 250px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #ff6600;
+        }
+
+        .materials-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .materials-table th {
+            background: linear-gradient(135deg, #000000 0%, #ff6600 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .materials-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e1e5e9;
+        }
+
+        .materials-table tr:hover {
+            background: #f8f9fa;
+        }
+
+
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .edit-btn, .delete-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .edit-btn {
+            background: #ff6600;
+            color: white;
+        }
+
+        .edit-btn:hover {
+            background: #e55a00;
+            transform: translateY(-1px);
+        }
+
+        .delete-btn {
+            background: #dc3545;
+            color: white;
+        }
+
+        .delete-btn:hover {
+            background: #c82333;
+            transform: translateY(-1px);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e1e5e9;
+        }
+
+        .modal-title {
+            font-size: 1.5em;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: #000;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group input, .form-group select {
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #ff6600;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 15px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .save-btn, .cancel-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .save-btn {
+            background: linear-gradient(135deg, #000000 0%, #ff6600 100%);
+            color: white;
+        }
+
+        .save-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .cancel-btn {
+            background: #6c757d;
+            color: white;
+        }
+
+        .cancel-btn:hover {
+            background: #5a6268;
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .success {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            .actions-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .search-box {
+                justify-content: center;
+            }
+            
+            .materials-table {
+                font-size: 12px;
+            }
+            
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 Materials Management</h1>
+            <p>Manage your materials database for dynamic pricing</p>
+            <div class="nav-buttons">
+                <a href="/admin/logout" class="nav-button">Logout</a>
+            </div>
+        </div>
+
+        <div class="content">
+            <!-- Configuration Section -->
+            <div class="config-section">
+                <h2>⚙️ System Configuration</h2>
+                <div id="configMessage" class="config-message"></div>
+                
+                <div class="config-grid">
+                    <div class="config-group">
+                        <label for="laserCost">Laser Cost ($/minute):</label>
+                        <input type="number" id="laserCost" name="laser_cost" value="2.00" step="0.01" min="0" required>
+                    </div>
+                    
+                    <div class="config-group">
+                        <label>Piercing Time Adjustment:</label>
+                        <div class="toggle-group">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="piercingToggle" name="piercing_toggle">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label" id="piercingLabel">OFF - Subtract 1 second from database value</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <button type="button" class="save-config-btn" onclick="saveConfiguration()">
+                    💾 Save Configuration
+                </button>
+            </div>
+
+            <!-- Materials Management Section -->
+            <div id="message"></div>
+            
+                         <div class="actions-bar">
+                 <button class="add-button" onclick="openAddModal()">➕ Add New Material</button>
+                 <button class="add-button" onclick="loadMaterials()" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">🔄 Refresh Data</button>
+                 <div class="search-box">
+                     <input type="text" id="searchInput" class="search-input" placeholder="Search materials..." onkeyup="filterMaterials()">
+                 </div>
+             </div>
+
+            <div id="materialsContainer">
+                <div class="loading">Loading materials...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Material Modal -->
+    <div id="materialModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modalTitle">Add New Material</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            
+            <form id="materialForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="material_name">Material Name *</label>
+                        <input type="text" id="material_name" name="material_name" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="grade">Grade</label>
+                        <input type="text" id="grade" name="grade">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="finish">Finish</label>
+                        <input type="text" id="finish" name="finish">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="thickness">Thickness (mm) *</label>
+                        <input type="number" id="thickness" name="thickness" step="0.01" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="density">Density (g/cm³) *</label>
+                        <input type="number" id="density" name="density" step="0.01" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="price_per_kg">Price per kg ($) *</label>
+                        <input type="number" id="price_per_kg" name="price_per_kg" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="scrap_price_per_kg">Scrap Price per kg ($)</label>
+                        <input type="number" id="scrap_price_per_kg" name="scrap_price_per_kg" step="0.01">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="speed">Machine Speed (mm/min) *</label>
+                        <input type="number" id="speed" name="speed" step="0.1" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="piercing_time">Piercing Time (seconds) *</label>
+                        <input type="number" id="piercing_time" name="piercing_time" step="0.01" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="vaporization_speed">Vaporization Speed (mm/min) *</label>
+                        <input type="number" id="vaporization_speed" name="vaporization_speed" step="0.1" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="vgroove_price">V-Groove Price ($) *</label>
+                        <input type="number" id="vgroove_price" name="vgroove_price" step="0.01" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="bending_price">Bending Price ($) *</label>
+                        <input type="number" id="bending_price" name="bending_price" step="0.01" required>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="cancel-btn" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="save-btn">Save Material</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let materials = [];
+        let editingMaterialId = null;
+
+        // Load materials and configuration on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadMaterials();
+            loadConfiguration();
+            setupPiercingToggle();
+            setupRealTimeUpdates();
+        });
+
+        // Configuration functions
+        function loadConfiguration() {
+            fetch('/api/admin/config')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('laserCost').value = data.laser_cost || 1.50;
+                    document.getElementById('piercingToggle').checked = data.piercing_toggle || false;
+                    updatePiercingLabel();
+                })
+                .catch(error => {
+                    console.error('Error loading configuration:', error);
+                });
+        }
+
+        function setupPiercingToggle() {
+            const toggle = document.getElementById('piercingToggle');
+            toggle.addEventListener('change', updatePiercingLabel);
+        }
+
+        function updatePiercingLabel() {
+            const toggle = document.getElementById('piercingToggle');
+            const label = document.getElementById('piercingLabel');
+            
+            if (toggle.checked) {
+                label.textContent = 'ON - Use database value as is';
+            } else {
+                label.textContent = 'OFF - Subtract 1 second from database value';
+            }
+        }
+
+        function saveConfiguration() {
+            const laserCost = parseFloat(document.getElementById('laserCost').value);
+            const piercingToggle = document.getElementById('piercingToggle').checked;
+            
+            const configData = {
+                laser_cost: laserCost,
+                piercing_toggle: piercingToggle
+            };
+
+            fetch('/api/admin/config', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(configData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showConfigMessage(data.message, 'success');
+                } else {
+                    showConfigMessage(data.error || 'Error saving configuration', 'error');
+                }
+            })
+            .catch(error => {
+                showConfigMessage('Error saving configuration: ' + error.message, 'error');
+            });
+        }
+
+        function showConfigMessage(message, type) {
+            const messageDiv = document.getElementById('configMessage');
+            messageDiv.textContent = message;
+            messageDiv.className = `config-message config-${type}`;
+            messageDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        function loadMaterials() {
+            console.log('Loading materials...');
+            fetch('/api/admin/materials')
+                .then(response => {
+                    console.log('Response status:', response.status);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Materials loaded:', data.length, 'materials');
+                    console.log('Sample material:', data[0]);
+                    materials = data;
+                    displayMaterials(materials);
+                    showMessage(`Successfully loaded ${data.length} materials from database`, 'success');
+                })
+                .catch(error => {
+                    console.error('Error loading materials:', error);
+                    showMessage('Error loading materials: ' + error.message, 'error');
+                });
+        }
+
+        function displayMaterials(materialsToShow) {
+            const container = document.getElementById('materialsContainer');
+            
+            if (materialsToShow.length === 0) {
+                container.innerHTML = '<div class="loading">No materials found</div>';
+                return;
+            }
+
+            const table = `
+                <table class="materials-table">
+                    <thead>
+                        <tr>
+                            <th>Material Name</th>
+                            <th>Grade</th>
+                            <th>Finish</th>
+                            <th>Thickness</th>
+                            <th>Price/kg</th>
+                            <th>Scrap Price/kg</th>
+                            <th>Speed</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${materialsToShow.map((material, index) => `
+                            <tr data-material-index="${index}">
+                                <td>${material['Material Name'] || ''}</td>
+                                <td>${(material['Grade'] ?? 0)}</td>
+                                <td>${material['Finish'] || ''}</td>
+                                <td>${material['Thickness'] || ''}</td>
+                                <td>${material['Price per kg'] || ''}</td>
+                                <td>${material['Scrap Price per kg'] || ''}</td>
+                                <td>${material['Speed'] || ''}</td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button class="edit-btn" onclick="editMaterialByIndex(${index})">Edit</button>
+                                        <button class="delete-btn" onclick="deleteMaterialByIndex(${index})">Delete</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            
+            container.innerHTML = table;
+        }
+
+        function filterMaterials() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = materials.filter(material => 
+                (String(material['Material Name'] || '')).toLowerCase().includes(searchTerm) ||
+                (String((material['Grade'] ?? 0))).toLowerCase().includes(searchTerm) ||
+                (String(material['Finish'] || '')).toLowerCase().includes(searchTerm)
+            );
+            displayMaterials(filtered);
+        }
+
+        function openAddModal() {
+            editingMaterialId = null;
+            document.getElementById('modalTitle').textContent = 'Add New Material';
+            document.getElementById('materialForm').reset();
+            document.getElementById('materialModal').style.display = 'block';
+        }
+
+                 function editMaterialByIndex(index) {
+             // Get the material from the current display to get its properties
+             const material = materials[index];
+             
+             if (!material) {
+                 alert('Material not found!');
+                 return;
+             }
+
+             // Get the EXACT material data from the database using name, thickness, grade, and finish
+             const materialName = encodeURIComponent(material['Material Name']);
+             const thickness = material['Thickness'];
+             const grade = material['Grade'] || '';
+             const finish = material['Finish'] || '';
+             
+             // Build query string for grade and finish
+             const queryParams = new URLSearchParams();
+             // Always send grade; default to 0
+             queryParams.append('grade', (grade ?? 0));
+             if (finish) queryParams.append('finish', finish);
+             
+             fetch(`/api/admin/materials/get/${materialName}/${thickness}?${queryParams.toString()}`)
+                 .then(response => {
+                     if (!response.ok) {
+                         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                     }
+                     return response.json();
+                 })
+                                 .then(dbMaterial => {
+                    // Store the original material identification for update
+                    editingMaterialId = dbMaterial['Material Name'];
+                    window.editingOriginalMaterial = {
+                        name: dbMaterial['Material Name'],
+                        thickness: dbMaterial['Thickness'],
+                        grade: dbMaterial['Grade'] ?? 0,
+                        finish: dbMaterial['Finish'] || ''
+                    };
+                    
+                    document.getElementById('modalTitle').textContent = 'Edit Material';
+                    
+                    document.getElementById('material_name').value = dbMaterial['Material Name'] || '';
+                     document.getElementById('grade').value = (dbMaterial['Grade'] ?? 0);
+                    document.getElementById('finish').value = dbMaterial['Finish'] || '';
+                    document.getElementById('thickness').value = dbMaterial['Thickness'] || '';
+                    document.getElementById('density').value = dbMaterial['Density'] || '';
+                    document.getElementById('price_per_kg').value = dbMaterial['Price per kg'] || '';
+                    document.getElementById('scrap_price_per_kg').value = dbMaterial['Scrap Price per kg'] || '';
+                    document.getElementById('speed').value = dbMaterial['Speed'] || '';
+                    document.getElementById('piercing_time').value = dbMaterial['Piercing Time'] || '';
+                    document.getElementById('vaporization_speed').value = dbMaterial['Vaporization Speed'] || '';
+                    document.getElementById('vgroove_price').value = dbMaterial['V-Groov'] || '';
+                    document.getElementById('bending_price').value = dbMaterial['Bending'] || '';
+                    const scrapInput = document.getElementById('scrap_price_per_kg');
+                    if (scrapInput) scrapInput.value = dbMaterial['Scrap Price per kg'] || '';
+                    
+                    document.getElementById('materialModal').style.display = 'block';
+                })
+                 .catch(error => {
+                     console.error('Error fetching material from database:', error);
+                     alert('Error loading material data from database!');
+                 });
+         }
+
+        function closeModal() {
+            document.getElementById('materialModal').style.display = 'none';
+            editingMaterialId = null;
+        }
+
+                 function deleteMaterialByIndex(index) {
+             const material = materials[index];
+             if (!material) {
+                 alert('Material not found!');
+                 return;
+             }
+             
+             if (!confirm('Are you sure you want to delete this material?')) return;
+
+             // Use the exact material properties for unique identification
+             const materialName = encodeURIComponent(material['Material Name']);
+             const thickness = material['Thickness'];
+             const grade = material['Grade'] || '';
+             const finish = material['Finish'] || '';
+             
+             // Build query string for unique identification
+             const queryParams = new URLSearchParams();
+             queryParams.append('thickness', thickness);
+             // Always include grade; default to 0
+             queryParams.append('grade', (grade ?? 0));
+             if (finish) queryParams.append('finish', finish);
+             
+             fetch(`/api/admin/materials/${materialName}?${queryParams.toString()}`, {
+                 method: 'DELETE'
+             })
+             .then(response => response.json())
+                           .then(data => {
+                  if (data.message) {
+                      showMessage(data.message, 'success');
+                      // Don't reload here as SSE will handle the update
+                  } else {
+                      showMessage(data.error || 'Error deleting material', 'error');
+                  }
+              })
+             .catch(error => {
+                 showMessage('Error deleting material: ' + error.message, 'error');
+             });
+         }
+
+        // Handle form submission
+        document.getElementById('materialForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+             const data = Object.fromEntries(formData.entries());
+             // Normalize empty grade to 0 and finish to '' to avoid NULLs
+             if (!data.grade || data.grade === '') data.grade = 0;
+             if (!data.finish) data.finish = '';
+            
+            // Convert numeric fields
+            data.thickness = parseFloat(data.thickness);
+            data.density = parseFloat(data.density);
+            data.price_per_kg = parseFloat(data.price_per_kg);
+            data.speed = parseFloat(data.speed);
+            data.piercing_time = parseFloat(data.piercing_time);
+            data.vaporization_speed = parseFloat(data.vaporization_speed);
+            data.vgroove_price = parseFloat(data.vgroove_price);
+            data.bending_price = parseFloat(data.bending_price);
+            if (data.scrap_price_per_kg !== undefined && data.scrap_price_per_kg !== '') {
+                data.scrap_price_per_kg = parseFloat(data.scrap_price_per_kg);
+            } else {
+                data.scrap_price_per_kg = 0.0;
+            }
+            if (data.scrap_price_per_kg !== undefined && data.scrap_price_per_kg !== '') {
+                data.scrap_price_per_kg = parseFloat(data.scrap_price_per_kg);
+            } else {
+                data.scrap_price_per_kg = 0.0;
+            }
+
+            // Include original material identification for updates
+            if (editingMaterialId && window.editingOriginalMaterial) {
+                data.original_thickness = window.editingOriginalMaterial.thickness;
+                data.original_grade = window.editingOriginalMaterial.grade;
+                data.original_finish = window.editingOriginalMaterial.finish;
+                console.log('DEBUG: Including original material identification:', window.editingOriginalMaterial);
+            }
+
+            const url = editingMaterialId 
+                ? `/api/admin/materials/${encodeURIComponent(editingMaterialId)}`
+                : '/api/admin/materials';
+            
+            const method = editingMaterialId ? 'PUT' : 'POST';
+
+            fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+                            .then(data => {
+                    if (data.message) {
+                        showMessage(data.message, 'success');
+                        closeModal();
+                        // Don't reload here as SSE will handle the update
+                    } else {
+                        showMessage(data.error || 'Error saving material', 'error');
+                    }
+                })
+                .catch(error => {
+                    showMessage('Error saving material: ' + error.message, 'error');
+                });
+        });
+
+        function showMessage(message, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = message;
+            
+            setTimeout(() => {
+                messageDiv.textContent = '';
+                messageDiv.className = '';
+            }, 5000);
+        }
+
+        // Real-time updates setup
+        function setupRealTimeUpdates() {
+            const eventSource = new EventSource('/api/materials/events');
+            
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'material_added' || data.type === 'material_updated' || data.type === 'material_deleted') {
+                    // Reload materials to show updated data
+                    loadMaterials();
+                    
+                    // Show notification
+                    const action = data.type === 'material_added' ? 'added' : 
+                                  data.type === 'material_updated' ? 'updated' : 'deleted';
+                    showMessage(`Material ${action} successfully!`, 'success');
+                }
+            };
+            
+            eventSource.onerror = function(event) {
+                console.error('SSE connection error:', event);
+                // Attempt to reconnect after 5 seconds
+                setTimeout(() => {
+                    setupRealTimeUpdates();
+                }, 5000);
+            };
+        }
+
+
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('materialModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        }
+    </script>
+</body>
+</html> 
