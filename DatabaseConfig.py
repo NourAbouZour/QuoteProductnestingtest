@@ -361,10 +361,11 @@ def get_filtered_options(material_name=None, thickness=None, grade=None, finish=
 
 def get_standard_boards():
     """
-    Fetch standard boards from database.
+    Fetch standard boards from database, sorted by size (largest first).
     Expected schema for table 'boards':
       id SERIAL/INT PK, length_mm FLOAT, width_mm FLOAT, quantity INT
-    Returns list of dicts: [{id, length_mm, width_mm, quantity}, ...]
+    Returns list of dicts: [{id, length_mm, width_mm, quantity, area_sq_mm}, ...]
+    Sorted by area (largest first) for optimal nesting algorithm performance
     """
     try:
         with engine.connect() as conn:
@@ -393,20 +394,37 @@ def get_standard_boards():
                 print("[boards] Table 'boards' not found; returning empty list.")
                 return []
 
-            rows = conn.execute(text(
-                'SELECT id, "length_mm", "width_mm", COALESCE("quantity", 0) AS quantity FROM boards'
-            )).fetchall()
+            # Enhanced query to calculate area and sort by size (largest first)
+            # Note: Based on the image, the columns are 'length' and 'width', not 'length_mm' and 'width_mm'
+            rows = conn.execute(text('''
+                SELECT 
+                    id, 
+                    length, 
+                    width, 
+                    COALESCE(quantity, 0) AS quantity,
+                    (length * width) AS area_sq_mm
+                FROM boards 
+                WHERE length > 0 AND width > 0
+                ORDER BY area_sq_mm DESC, length DESC, width DESC
+            ''')).fetchall()
+            
             boards = []
             for r in rows:
                 try:
-                    boards.append({
+                    board_data = {
                         'id': int(r[0]),
-                        'length_mm': float(r[1]),
-                        'width_mm': float(r[2]),
-                        'quantity': int(r[3])
-                    })
-                except Exception:
+                        'length_mm': float(r[1]),  # Convert length to mm
+                        'width_mm': float(r[2]),   # Convert width to mm
+                        'quantity': int(r[3]),
+                        'area_sq_mm': float(r[4])
+                    }
+                    boards.append(board_data)
+                    print(f"[boards] Loaded board ID {board_data['id']}: {board_data['length_mm']:.1f}x{board_data['width_mm']:.1f}mm (area: {board_data['area_sq_mm']:.0f} sq mm) qty: {board_data['quantity']}")
+                except Exception as e:
+                    print(f"[boards] Error processing board row: {e}")
                     continue
+            
+            print(f"[boards] Total boards loaded: {len(boards)} (sorted by size, largest first)")
             return boards
     except Exception as e:
         print(f"[boards] Error fetching boards: {e}")

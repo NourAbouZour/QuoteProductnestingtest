@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DXF Filter & Visualizer</title>
+    <title>NAGGIAR SINCE 1860- DXF Processing System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&family=Exo+2:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -12,37 +13,120 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+            font-family: 'Rajdhani', sans-serif;
+            background: url('/assets/wallpaper.jpg') center/cover no-repeat fixed;
             min-height: 100vh;
             padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.8) 0%, rgba(20, 20, 20, 0.85) 100%);
+            z-index: 1;
+        }
+
+        /* Animated Metal Objects */
+        .metal-objects {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .metal-gear {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(45deg, #2d2d2d, #4a4a4a, #2d2d2d);
+            border-radius: 50%;
+            border: 3px solid #ff8c00;
+            animation: rotate 20s linear infinite;
+            opacity: 0.3;
+        }
+
+        .metal-gear:nth-child(1) {
+            top: 10%;
+            left: 10%;
+            animation-delay: 0s;
+        }
+
+        .metal-gear:nth-child(2) {
+            top: 20%;
+            right: 15%;
+            animation-delay: -5s;
+            width: 40px;
+            height: 40px;
+        }
+
+        .metal-gear:nth-child(3) {
+            bottom: 20%;
+            left: 20%;
+            animation-delay: -10s;
+            width: 80px;
+            height: 80px;
+        }
+
+        .metal-gear:nth-child(4) {
+            bottom: 10%;
+            right: 10%;
+            animation-delay: -15s;
+            width: 50px;
+            height: 50px;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             background: rgba(255, 255, 255, 0.95);
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(20px);
+            border-radius: 25px;
+            box-shadow: 
+                0 25px 50px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
             overflow: hidden;
+            position: relative;
+            z-index: 2;
+            border: 2px solid rgba(255, 140, 0, 0.3);
         }
 
         .header {
-            background: linear-gradient(135deg, #ff6600 0%, #ff8533 100%);
-            color: white;
-            padding: 30px;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
+            color: #ff8c00;
+            padding: 40px;
             text-align: center;
+            position: relative;
+            overflow: hidden;
         }
 
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            font-weight: 300;
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 140, 0, 0.1), transparent);
+            animation: shimmer 4s infinite;
         }
 
-        .header p {
-            font-size: 1.1em;
-            opacity: 0.9;
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
         }
 
         .header-content {
@@ -50,10 +134,46 @@
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
+            position: relative;
+            z-index: 2;
         }
 
         .header-text {
             flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .company-logo {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 3px solid #ff8c00;
+            object-fit: cover;
+            box-shadow: 0 0 20px rgba(255, 140, 0, 0.5);
+        }
+
+        .header h1 {
+            font-family: 'Orbitron', monospace;
+            font-size: 2.8em;
+            margin-bottom: 10px;
+            font-weight: 900;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            letter-spacing: 2px;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+            font-weight: 400;
+            color: #ccc;
         }
 
         .admin-section {
@@ -62,42 +182,80 @@
 
         .admin-btn {
             display: inline-block;
-            padding: 12px 24px;
-            background: linear-gradient(135deg, #000000 0%, #333333 100%);
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #1a1a1a 0%, #ff8c00 50%, #1a1a1a 100%);
             color: white;
             text-decoration: none;
             border-radius: 25px;
-            font-weight: 600;
-            font-size: 1em;
+            font-weight: 700;
+            font-family: 'Orbitron', monospace;
+            font-size: 1.1em;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 8px 25px rgba(255, 140, 0, 0.3);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .admin-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .admin-btn:hover::before {
+            left: 100%;
         }
 
         .admin-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+            transform: translateY(-3px);
+            box-shadow: 0 15px 35px rgba(255, 140, 0, 0.4);
         }
 
         .main-content {
-            padding: 40px;
+            padding: 50px;
+            background: rgba(255, 255, 255, 0.98);
         }
 
         .upload-section {
-            background: #f8f9fa;
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 30px;
-            border: 2px dashed #dee2e6;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 40px;
+            border: 3px dashed #dee2e6;
             transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 20%, rgba(255, 140, 0, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(255, 140, 0, 0.03) 0%, transparent 50%);
+            pointer-events: none;
         }
 
         .upload-section:hover {
-            border-color: #ff6600;
-            background: #fff5f0;
+            border-color: #ff8c00;
+            background: linear-gradient(135deg, #fff5f0 0%, #ffe8d6 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px rgba(255, 140, 0, 0.2);
         }
 
         .upload-section.dragover {
-            border-color: #ff6600;
+            border-color: #ff8c00;
         }
 
 
@@ -221,23 +379,143 @@
 
         .processing {
             text-align: center;
-            padding: 20px;
+            padding: 30px;
             display: none;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
+            border-radius: 20px;
+            border: 2px solid #ff8c00;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            margin: 20px auto;
+            max-width: 500px;
+            position: relative;
+            overflow: hidden;
         }
 
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #ff6600;
+        .processing::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 140, 0, 0.1), transparent);
+            animation: metalShimmer 2s infinite;
+        }
+
+        @keyframes metalShimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .metal-loader {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
+            background: linear-gradient(135deg, #333 0%, #555 50%, #333 100%);
+            border: 3px solid #ff8c00;
+            box-shadow: 
+                0 0 20px rgba(255, 140, 0, 0.5),
+                inset 0 0 20px rgba(0, 0, 0, 0.3);
         }
 
-        @keyframes spin {
+        .metal-loader::before {
+            content: '';
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            bottom: 10px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            border-top: 2px solid #ff8c00;
+            border-right: 2px solid #ff8c00;
+            animation: metalSpin 1.5s linear infinite;
+        }
+
+        .metal-loader::after {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            bottom: 20px;
+            border-radius: 50%;
+            border: 1px solid transparent;
+            border-bottom: 1px solid #ff6600;
+            border-left: 1px solid #ff6600;
+            animation: metalSpin 1s linear infinite reverse;
+        }
+
+        @keyframes metalSpin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+
+        .processing-text {
+            color: #ff8c00;
+            font-family: 'Orbitron', monospace;
+            font-size: 1.2em;
+            font-weight: 600;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px rgba(255, 140, 0, 0.5);
+            letter-spacing: 1px;
+        }
+
+        .processing-subtext {
+            color: #ccc;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+        }
+
+        .metal-progress-container {
+            width: 100%;
+            height: 8px;
+            background: linear-gradient(90deg, #333 0%, #444 50%, #333 100%);
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid #555;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .metal-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #ff8c00 0%, #ff6600 50%, #ff8c00 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+            position: relative;
+            box-shadow: 0 0 10px rgba(255, 140, 0, 0.6);
+        }
+
+        .metal-progress-bar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: progressShine 1.5s infinite;
+        }
+
+        @keyframes progressShine {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .metal-progress-label {
+            position: absolute;
+            top: -25px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            color: #ff8c00;
+            font-family: 'Orbitron', monospace;
+            font-size: 0.9em;
+            font-weight: 600;
+            text-shadow: 0 0 5px rgba(255, 140, 0, 0.5);
         }
 
         .results-section {
@@ -368,36 +646,75 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
             z-index: 1000;
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 20px;
         }
 
         .material-popup-content {
-            background: white;
-            border-radius: 15px;
-            max-width: 800px;
-            width: 90%;
-            max-height: 80vh;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
+            border-radius: 25px;
+            max-width: 900px;
+            width: 100%;
+            max-height: 85vh;
             overflow-y: auto;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            box-shadow: 
+                0 25px 50px rgba(0, 0, 0, 0.5),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 140, 0, 0.3);
+            position: relative;
+        }
+
+        .material-popup-content::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 20%, rgba(255, 140, 0, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(255, 140, 0, 0.05) 0%, transparent 50%);
+            pointer-events: none;
+            border-radius: 25px;
         }
 
         .material-popup-header {
-            background: linear-gradient(135deg, #ff6600 0%, #ff8533 100%);
+            background: linear-gradient(135deg, #ff8c00 0%, #ff6600 50%, #ff8c00 100%);
             color: white;
-            padding: 20px;
-            border-radius: 15px 15px 0 0;
+            padding: 30px;
+            border-radius: 23px 23px 0 0;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .material-popup-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            animation: shimmer 3s infinite;
         }
 
         .material-popup-header h3 {
             margin: 0;
-            font-size: 1.4em;
+            font-size: 1.6em;
+            font-family: 'Orbitron', monospace;
+            font-weight: 700;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            letter-spacing: 1px;
+            position: relative;
+            z-index: 1;
         }
 
         .material-popup-close {
@@ -405,20 +722,31 @@
             cursor: pointer;
             font-weight: bold;
             line-height: 1;
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 1;
         }
 
         .material-popup-close:hover {
-            opacity: 0.8;
+            transform: scale(1.1);
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
         }
 
         .material-popup-body {
-            padding: 25px;
+            padding: 35px;
+            background: rgba(255, 255, 255, 0.98);
+            margin: 0;
+            position: relative;
+            z-index: 1;
         }
 
         .material-popup-body p {
-            margin-bottom: 20px;
-            color: #333;
-            font-size: 1.1em;
+            margin-bottom: 25px;
+            color: #2d2d2d;
+            font-size: 1.2em;
+            font-weight: 500;
+            line-height: 1.6;
+            text-align: center;
         }
 
         .material-popup-parts {
@@ -426,41 +754,59 @@
         }
 
         .material-popup-part {
-            background: #f8f9fa;
-            border: 2px solid #e9ecef;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 15px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 2px solid #ff8c00;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .material-popup-part::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #ff8c00 0%, #ff6600 50%, #ff8c00 100%);
         }
 
         .material-popup-part-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
         }
 
         .material-popup-part-title {
-            font-weight: bold;
-            color: #333;
-            font-size: 1.1em;
+            font-weight: 700;
+            color: #1a1a1a;
+            font-size: 1.3em;
+            font-family: 'Orbitron', monospace;
+            letter-spacing: 1px;
         }
 
         .material-popup-part-status {
-            padding: 5px 10px;
-            border-radius: 15px;
+            padding: 8px 16px;
+            border-radius: 20px;
             font-size: 0.9em;
-            font-weight: bold;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
 
         .material-popup-part-status.complete {
-            background: #d4edda;
-            color: #155724;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
         }
 
         .material-popup-part-status.incomplete {
-            background: #f8d7da;
-            color: #721c24;
+            background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%);
+            color: white;
         }
 
         .material-popup-part-fields {
@@ -483,18 +829,29 @@
             grid-row: 1 / span 2;
             width: 160px;
             height: 160px;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            background: #fff;
+            border: 2px solid #ff8c00;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
             display: flex;
             align-items: center;
             justify-content: center;
             overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            position: relative;
         }
+        
+        .material-popup-part-image::before {
+            content: '📐';
+            font-size: 2em;
+            color: #ff8c00;
+            opacity: 0.3;
+        }
+        
         .material-popup-part-image img {
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
+            border-radius: 10px;
         }
 
         .material-popup-field {
@@ -503,60 +860,96 @@
         }
 
         .material-popup-field label {
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 5px;
-            font-size: 0.9em;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+            font-size: 1em;
+            font-family: 'Orbitron', monospace;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         .material-popup-field select {
-            padding: 8px 12px;
+            padding: 12px 16px;
             border: 2px solid #e1e5e9;
-            border-radius: 6px;
+            border-radius: 10px;
             font-size: 14px;
             background: white;
-            transition: border-color 0.3s ease;
+            transition: all 0.3s ease;
             width: 100%;
+            font-weight: 500;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
 
         .material-popup-field select:focus {
             outline: none;
-            border-color: #ff6600;
+            border-color: #ff8c00;
+            box-shadow: 0 0 15px rgba(255, 140, 0, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .material-popup-field select:hover {
+            border-color: #ff8c00;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
         }
 
         .material-popup-actions {
             display: flex;
-            gap: 15px;
-            justify-content: flex-end;
-            margin-top: 20px;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 30px;
         }
 
         .material-popup-actions .btn {
-            padding: 12px 24px;
+            padding: 15px 30px;
             border: none;
-            border-radius: 8px;
-            font-weight: 600;
+            border-radius: 12px;
+            font-weight: 700;
+            font-family: 'Orbitron', monospace;
             cursor: pointer;
             transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            overflow: hidden;
+            min-width: 140px;
+        }
+
+        .material-popup-actions .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .material-popup-actions .btn:hover::before {
+            left: 100%;
         }
 
         .material-popup-actions .btn-primary {
-            background: linear-gradient(135deg, #ff6600 0%, #ff8533 100%);
+            background: linear-gradient(135deg, #ff8c00 0%, #ff6600 50%, #ff8c00 100%);
             color: white;
+            box-shadow: 0 5px 20px rgba(255, 140, 0, 0.3);
         }
 
         .material-popup-actions .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(255, 102, 0, 0.3);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(255, 140, 0, 0.5);
         }
 
         .material-popup-actions .btn-secondary {
-            background: #6c757d;
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
             color: white;
+            box-shadow: 0 5px 20px rgba(108, 117, 125, 0.3);
         }
 
         .material-popup-actions .btn-secondary:hover {
-            background: #5a6268;
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(108, 117, 125, 0.5);
         }
 
         .selection-grid {
@@ -1494,18 +1887,65 @@
         }
 
         .scrap-btn {
-            background: #ff6600;
-            color: #fff;
+            background: linear-gradient(135deg, #ff8c00 0%, #ff6600 50%, #ff8c00 100%);
+            color: white;
             border: none;
-            border-radius: 10px;
-            padding: 10px 14px;
-            font-weight: 600;
+            border-radius: 15px;
+            padding: 15px 25px;
+            font-weight: 700;
+            font-family: 'Orbitron', monospace;
+            font-size: 1.1em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
             cursor: pointer;
-            transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
-            box-shadow: 0 2px 8px rgba(255,102,0,0.2);
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 25px rgba(255, 140, 0, 0.4);
+            position: relative;
+            overflow: hidden;
+            min-width: 180px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin:auto;
         }
-        .scrap-btn:hover { background: #e65a00; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(255,102,0,0.3); }
-        .scrap-btn:disabled { background: #ccc; cursor: not-allowed; box-shadow: none; transform: none; }
+        
+        .scrap-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .scrap-btn:hover::before {
+            left: 100%;
+        }
+        
+        .scrap-btn:hover { 
+            transform: translateY(-3px); 
+            box-shadow: 0 12px 35px rgba(255, 140, 0, 0.6);
+            background: linear-gradient(135deg, #ff6600 0%, #ff8c00 50%, #ff6600 100%);
+        }
+        
+        .scrap-btn:active {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(255, 140, 0, 0.5);
+        }
+        
+        .scrap-btn:disabled { 
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%); 
+            cursor: not-allowed; 
+            box-shadow: 0 4px 15px rgba(108, 117, 125, 0.3);
+            transform: none; 
+        }
+        
+        .scrap-btn:disabled::before {
+            display: none;
+        }
 
         /* Quantity input styling */
         .piece-counter { display: flex; gap: 8px; align-items: center; justify-content: center; }
@@ -1692,6 +2132,14 @@
     </style>
 </head>
 <body>
+    <!-- Animated Metal Objects -->
+    <div class="metal-objects">
+        <div class="metal-gear"></div>
+        <div class="metal-gear"></div>
+        <div class="metal-gear"></div>
+        <div class="metal-gear"></div>
+    </div>
+
     <!-- PDF Input Modal -->
     <div id="pdfModal" class="modal">
         <div class="modal-content">
@@ -1848,13 +2296,18 @@
         <div class="header">
             <div class="header-content">
                 <div class="header-text">
-                    <h1>DXF Filter & Visualizer</h1>
-                    <!-- <p>Upload your DXF file and see the filtered results according to your specifications</p> -->
-                    {% if user_data %}
-                    <p style="margin-top: 10px; font-size: 0.9em; opacity: 0.8;">
-                        Welcome, {{ user_data.full_name }} ({{ user_data.email }})
-                    </p>
-                    {% endif %}
+                    <div class="logo-section">
+                        <img src="/assets/logo2.jpg" alt="NAGGIAR Logo" class="company-logo">
+                        <div>
+                            <h1>NAGGIAR SINCE 1860</h1>
+                            <p>Professional DXF Processing & Metal Solutions</p>
+                            {% if user_data %}
+                            <p style="margin-top: 10px; font-size: 0.9em; opacity: 0.8;">
+                                Welcome, {{ user_data.full_name }} ({{ user_data.email }})
+                            </p>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
                 <div class="admin-section">
                     {% if user_data %}
@@ -1862,7 +2315,7 @@
                     {% else %}
                     <a href="{{ url_for('user_login') }}" class="admin-btn">Login</a>
                     {% endif %}
-                    <a href="{{ url_for('admin_login') }}" class="admin-btn" style="margin-left: 10px;">Admin</a>
+                    <a href="{{ url_for('admin_login') }}" class="admin-btn" style="margin-left: 10px;">Admin Panel</a>
                 </div>
             </div>
         </div>
@@ -1914,17 +2367,18 @@
             <div id="materialPopup" class="material-popup" style="display: none;">
                 <div class="material-popup-content">
                     <div class="material-popup-header">
-                        <h3>🔧 Material Selection Required</h3>
-                       
+                        <h3>🔧 MATERIAL SELECTION REQUIRED</h3>
+                        <!-- <span class="material-popup-close" onclick="closeMaterialPopup()">&times;</span> -->
                     </div>
                     <div class="material-popup-body">
-                        <p>Some parts in your DXF file are missing material information. Please select the materials for these parts:</p>
+                        <p>Some parts in your DXF file are missing material information. Please select the materials for these parts to continue with the cost calculation:</p>
                         <div id="materialPopupParts" class="material-popup-parts">
                             <!-- Parts will be populated here -->
                         </div>
                         <div class="material-popup-actions">
-                            <button type="button" class="btn btn-primary" onclick="applyMaterialSelections()">Continue</button>
-                          
+                            <button type="button" class="btn btn-primary" onclick="applyMaterialSelections()">
+                                ⚙️ CONTINUE PROCESSING
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1986,8 +2440,10 @@
                         </div>
                     </div> -->
                     <div class="scrap-actions">
-                        <button type="button" class="scrap-btn" id="calcQuoteBtn" onclick="calculateQuote()">Calculate Quote</button>
-                        <button type="button" class="scrap-btn" id="nestMetricsBtn">🔧 Calculate Nesting &amp; Scrap</button>
+                        
+                        <!-- <button type="button" class="scrap-btn" id="nestMetricsBtn">
+                            🏭 OPTIMIZE NESTING
+                        </button> -->
                     </div>
                 </div>
                 
@@ -2152,17 +2608,20 @@
 
 
             <div class="processing" id="processing">
-                <div class="spinner"></div>
-                <p id="processingText">Processing DXF file...</p>
-                <div id="progressContainer" style="display:none; width:100%; max-width:480px; height:14px; background:#eee; border-radius:8px; overflow:hidden; margin-top:8px; position:relative;">
-                    <div id="progressBar" style="height:100%; width:0%; background:#4caf50; transition:width 0.2s ease;"></div>
-                    <div id="progressLabel" style="position:absolute; top:0; left:0; right:0; height:100%; display:flex; align-items:center; justify-content:center; font-size:12px; color:#333;">0%</div>
+                <div class="metal-loader"></div>
+                <div class="processing-text" id="processingText">⚙️ PROCESSING METAL PARTS</div>
+                <div class="processing-subtext" id="processingSubtext">Analyzing DXF geometry and calculating material requirements...</div>
+                <div class="metal-progress-container" id="progressContainer" style="display:none;">
+                    <div class="metal-progress-bar" id="progressBar"></div>
+                    <div class="metal-progress-label" id="progressLabel">0%</div>
                 </div>
             </div>
 
             <div class="error-message" id="errorMessage"></div>
             <div class="success-message" id="successMessage"></div>
-
+            <button type="button" class="scrap-btn" id="calcQuoteBtn" onclick="calculateQuote()">
+                ⚡ CALCULATE QUOTE
+            </button>
             <div class="results-section" id="resultsSection" style="display:none">
                 <div class="stats-grid" id="statsGrid"></div>
                 <div class="image-container" style="margin-bottom:16px;">
@@ -2300,7 +2759,7 @@
             const externalServicesBreakdownEl = document.getElementById('externalServicesBreakdown');
             if (externalServicesBreakdownEl) {
                 if (servicesBreakdown.length > 0) {
-                    externalServicesBreakdownEl.innerHTML = servicesBreakdown.map(service => 
+                    externalServicesBreakdownEl.innerHTML = (servicesBreakdown || []).map(service => 
                         `<div class="cost-breakdown-item">
                             <span class="cost-breakdown-label">Add ${service.name.charAt(0).toUpperCase() + service.name.slice(1)}:</span>
                             <span class="cost-breakdown-value">$${service.total.toFixed(2)}</span>
@@ -2846,6 +3305,8 @@
             const progressContainer = document.getElementById('progressContainer');
             const progressBar = document.getElementById('progressBar');
             const progressLabel = document.getElementById('progressLabel');
+            const processingText = document.getElementById('processingText');
+            const processingSubtext = document.getElementById('processingSubtext');
             let pollTimer = null;
             if (jobId && progressContainer && progressBar && progressLabel) {
                 progressContainer.style.display = 'block';
@@ -2860,6 +3321,22 @@
                             const pct = Math.max(0, Math.min(100, parseInt(info.percent || 0)));
                             progressBar.style.width = pct + '%';
                             progressLabel.textContent = `${pct}%${info.message ? ' - ' + info.message : ''}`;
+                            
+                            // Update processing text based on progress
+                            if (pct < 30) {
+                                processingText.textContent = '⚙️ READING DXF FILE';
+                                processingSubtext.textContent = 'Extracting geometry and layer information...';
+                            } else if (pct < 60) {
+                                processingText.textContent = '🔧 ANALYZING PARTS';
+                                processingSubtext.textContent = 'Grouping connected entities and calculating dimensions...';
+                            } else if (pct < 90) {
+                                processingText.textContent = '📊 CALCULATING COSTS';
+                                processingSubtext.textContent = 'Computing material costs and processing requirements...';
+                            } else {
+                                processingText.textContent = '✅ FINALIZING RESULTS';
+                                processingSubtext.textContent = 'Preparing detailed cost breakdown and visualizations...';
+                            }
+                            
                             if (info.status === 'done' || info.status === 'error') {
                                 clearInterval(pollTimer);
                             }
@@ -2898,6 +3375,8 @@
                     // ensure 100% on completion
                     progressBar.style.width = '100%';
                     progressLabel.textContent = '100% - Completed';
+                    processingText.textContent = '✅ PROCESSING COMPLETE';
+                    processingSubtext.textContent = 'All parts analyzed and cost calculations finished!';
                     setTimeout(() => { if (progressContainer) progressContainer.style.display = 'none'; }, 1200);
                 }
                 
@@ -3404,7 +3883,7 @@
                         <div class="error-summary-content">
                             <p><strong>${partsWithErrors.length} part(s) have calculation errors:</strong></p>
                             <ul>
-                                ${partsWithErrors.map(pc => `
+                                ${(partsWithErrors || []).map(pc => `
                                     <li><strong>Part ${pc.part_number}:</strong> ${pc.calculation_error}</li>
                                 `).join('')}
                             </ul>
@@ -3587,7 +4066,7 @@
 
         async function loadMaterialConfigs(materials) {
             const out = {};
-            await Promise.all(materials.map(async (m) => {
+            await Promise.all((materials || []).map(async (m) => {
                 const qs = new URLSearchParams({
                     material_name: m.material_name,
                     thickness: String(m.thickness),
@@ -3896,7 +4375,7 @@
                     <div class="material-popup-part-fields">
                         <div class="material-popup-part-image" id="popup_img_${part.partNumber}">Loading…</div>
                         <div class="material-popup-field">
-                            <label for="popup_material_${part.partNumber}">Material Type: <span style="color: #666; font-size: 12px;">(Optional)</span></label>
+                            
                             <select id="popup_material_${part.partNumber}" class="popup-material-select" data-part="${part.partNumber}" data-field="material">
                                 <option value="">Select Material Type (Optional)</option>
                             </select>
@@ -4970,6 +5449,51 @@
             }
         }
 
+        // Debug function to check current data
+        function debugCurrentData() {
+            console.log('[DEBUG] Current Data Structure:');
+            console.log('  - window.currentData exists:', !!window.currentData);
+            if (window.currentData) {
+                console.log('  - Keys:', Object.keys(window.currentData));
+                console.log('  - meaningful_parts:', window.currentData.meaningful_parts?.length || 0);
+                console.log('  - part_costs:', window.currentData.part_costs?.length || 0);
+                console.log('  - parts:', window.currentData.parts?.length || 0);
+                console.log('  - Full currentData:', window.currentData);
+            }
+        }
+
+        // Comprehensive error handling function
+        function safeArrayAccess(array, fallback = []) {
+            return Array.isArray(array) ? array : fallback;
+        }
+
+        function safeObjectAccess(obj, property, fallback = null) {
+            return (obj && typeof obj === 'object' && property in obj) ? obj[property] : fallback;
+        }
+
+        function safeMapOperation(array, operation, fallback = []) {
+            try {
+                const safeArray = safeArrayAccess(array, []);
+                return safeArray.map(operation);
+            } catch (error) {
+                console.error('Error in map operation:', error);
+                return fallback;
+            }
+        }
+
+        // Test debug endpoint
+        async function testDebugEndpoint() {
+            try {
+                const response = await fetch('/api/simple-nesting/debug');
+                const data = await response.json();
+                console.log('[DEBUG] API Debug Response:', data);
+                return data;
+            } catch (error) {
+                console.error('[DEBUG] API Debug Error:', error);
+                return null;
+            }
+        }
+
         // Nest & Metrics handler
         async function nestAndMetrics() {
             try {
@@ -4979,14 +5503,20 @@
                     btn.textContent = '🔄 Calculating...'; 
                 }
 
+                // Debug current data structure
+                debugCurrentData();
+                
+                // Test debug endpoint
+                await testDebugEndpoint();
+                
                 // Check if we have processed DXF data
                 if (!window.currentData) {
                     showError('Please upload and process a DXF file first.');
                     return;
                 }
 
-                // Check if we have the required data for nesting
-                if (!window.currentData.meaningful_parts && !window.currentData.part_images) {
+                // Check if we have the required data for nesting with comprehensive validation
+                if (!window.currentData.meaningful_parts && !window.currentData.part_images && !window.currentData.part_costs) {
                     showError('No parts data available for nesting. Please upload a single DXF file first.');
                     return;
                 }
@@ -4997,29 +5527,101 @@
                 const selectedMaterial = materialSelect ? materialSelect.value : 'Steel';
                 const selectedThickness = thicknessSelect ? parseFloat(thicknessSelect.value) : 1.0;
 
-                // Use the available data structure
-                const partsData = window.currentData.meaningful_parts || [];
-                const labelsData = window.currentData.extracted_part_labels || window.currentData.part_labels || {};
+                // Use the available data structure - check multiple sources for parts data
+                const partsData = window.currentData.meaningful_parts || 
+                                 window.currentData.parts || 
+                                 window.currentData.processed_parts || 
+                                 [];
+                const labelsData = window.currentData.extracted_part_labels || 
+                                  window.currentData.part_labels || 
+                                  window.currentData.labels || 
+                                  {};
                 
-                console.log('[NESTING] Starting calculation with:', {
+                console.log('[VISUAL_NESTING] Starting calculation with:', {
                     parts: partsData.length,
                     labels: Object.keys(labelsData).length,
                     material: selectedMaterial,
                     thickness: selectedThickness,
                     hasRawParts: !!window.currentData.meaningful_parts,
-                    hasPartImages: !!window.currentData.part_images
+                    hasPartImages: !!window.currentData.part_images,
+                    currentDataKeys: Object.keys(window.currentData || {}),
+                    partsDataStructure: partsData.length > 0 ? Object.keys(partsData[0] || {}) : 'no parts'
                 });
 
-                // Prepare nesting request
-                const requestData = {
+                // Store data for continuous optimization
+                currentOptimizationData = {
                     meaningful_parts: partsData,
                     extracted_part_labels: labelsData,
                     scrap_threshold: 0.20, // 20% threshold
                     material_name: selectedMaterial,
                     thickness_mm: selectedThickness,
-                    // Fallback data if meaningful_parts is not available
-                    part_images: window.currentData.part_images || []
+                    part_images: window.currentData.part_images || [],
+                    continuous_optimization: false,
+                    max_boards: 10  // Allow multiple boards for optimization
                 };
+
+                // Prepare nesting request for Advanced Nesting API with database integration
+                // Get parts data from multiple sources
+                const meaningfulParts = currentOptimizationData.meaningful_parts || partsData || [];
+                
+                console.log('[NESTING] Parts data sources:', {
+                    meaningful_parts: currentOptimizationData.meaningful_parts?.length || 0,
+                    partsData: partsData?.length || 0,
+                    meaningfulParts: meaningfulParts.length
+                });
+                
+                if (meaningfulParts.length === 0) {
+                    // Try to create parts from cost data if available
+                    console.log('[NESTING] No meaningful parts found, checking for cost data...');
+                    
+                    if (window.currentData && window.currentData.part_costs && window.currentData.part_costs.length > 0) {
+                        console.log('[NESTING] Found cost data, creating parts from cost data...');
+                        const costParts = window.currentData.part_costs.map((cost, index) => ({
+                            id: `part_${index + 1}`,
+                            length_mm: cost.length_mm || 0,
+                            width_mm: cost.width_mm || 0,
+                            quantity: 1, // Default quantity
+                            material_id: selectedMaterial.toLowerCase(),
+                            priority: 1,
+                            rotation_allowed: true
+                        }));
+                        
+                        console.log('[NESTING] Created parts from cost data:', costParts.length);
+                        meaningfulParts.push(...costParts);
+                    }
+                    
+                    if (meaningfulParts.length === 0) {
+                        throw new Error('No parts data available for nesting. Please upload and process a DXF file first.');
+                    }
+                }
+                
+                const requestData = {
+                    meaningful_parts: meaningfulParts.map(part => ({
+                        id: part.id || part.part_number || Math.random().toString(36).substr(2, 9),
+                        length_mm: part.length_mm || part.length || 0,
+                        width_mm: part.width_mm || part.width || 0,
+                        quantity: part.quantity || 1,
+                        material_id: selectedMaterial.toLowerCase(),
+                        priority: 1,
+                        rotation_allowed: part.rotation_allowed !== false
+                    })),
+                    extracted_part_labels: window.currentData?.part_labels || {},
+                    part_images: window.currentData?.part_images || [],
+                    material_name: selectedMaterial,
+                    thickness_mm: selectedThickness,
+                    scrap_threshold: 0.20,
+                    continuous_optimization: false,
+                    max_boards: 10
+                };
+                
+                console.log('[NESTING] Request data:', {
+                    meaningfulPartsCount: requestData.meaningful_parts.length,
+                    parts: requestData.meaningful_parts.map(p => ({ id: p.id, length: p.length_mm, width: p.width_mm, qty: p.quantity })),
+                    material: requestData.material_name,
+                    thickness: requestData.thickness_mm,
+                    currentDataAvailable: !!window.currentData,
+                    currentDataKeys: window.currentData ? Object.keys(window.currentData) : 'no currentData'
+                });
 
                 const response = await fetch('/api/nesting/calculate', {
                     method: 'POST',
@@ -5037,9 +5639,29 @@
                 const result = await response.json();
                 console.log('[NESTING] Results received:', result);
 
-                // Display results
-                displayNestingResults(result);
-                showSuccess('Nesting calculation completed successfully!');
+                // Validate result structure before displaying
+                if (!result || typeof result !== 'object') {
+                    throw new Error('Invalid response format from server');
+                }
+
+                // Debug: Log key metrics
+                console.log('[NESTING] Key metrics:', {
+                    success: result.success,
+                    total_utilization: result.total_utilization,
+                    total_scrap_percentage: result.total_scrap_percentage,
+                    total_boards_used: result.total_boards_used,
+                    all_parts_fitted: result.all_parts_fitted,
+                    has_svg_layout: !!result.svg_layout,
+                    svg_layout_length: result.svg_layout ? result.svg_layout.length : 0,
+                    results_count: result.results ? result.results.length : 0
+                });
+                
+                // Debug: Log full result structure
+                console.log('[NESTING] Full result:', result);
+
+                // Display visual results
+                displayVisualNestingResults(result);
+                showSuccess('Visual nesting calculation completed! Click "Start Optimization" for continuous improvement.');
 
             } catch (err) {
                 console.error('[NESTING] Error:', err);
@@ -5048,21 +5670,33 @@
                 const btn = document.getElementById('nestMetricsBtn');
                 if (btn) { 
                     btn.disabled = false; 
-                    btn.textContent = '🔧 Calculate Nesting & Scrap'; 
+                    btn.innerHTML = '🏭 OPTIMIZE NESTING'; 
                 }
             }
         }
 
-        function displayNestingResults(result) {
-            // Create or update nesting results display
+        // Global variables for nesting optimization
+        let isOptimizing = false;
+        let optimizationInterval = null;
+        let currentOptimizationData = null;
+
+        function displayVisualNestingResults(result) {
+            // Add comprehensive error handling
+            if (!result) {
+                console.error('[NESTING] No result data provided');
+                showError('No nesting results received from server');
+                return;
+            }
+
+            // Create or update visual nesting results display
             let resultsDiv = document.getElementById('nestingResults');
             if (!resultsDiv) {
                 resultsDiv = document.createElement('div');
                 resultsDiv.id = 'nestingResults';
-                resultsDiv.className = 'nesting-results';
+                resultsDiv.className = 'visual-nesting-results';
                 
                 // Insert after the scrap section
-                const scrapSection = document.querySelector('.scrap-section');
+                const scrapSection = document.querySelector('.scrap-factor-section');
                 if (scrapSection) {
                     scrapSection.parentNode.insertBefore(resultsDiv, scrapSection.nextSibling);
                 } else {
@@ -5070,209 +5704,1002 @@
                 }
             }
 
-            const bestBoard = result.best_board;
-            const summary = result.parts_summary;
+            // Handle new API response format with null checks
+            const isSuccess = result.success || false;
+            
+            // Get parts info from parts_summary or calculate from results
+            const partsSummary = result.parts_summary || {};
+            const totalParts = partsSummary.total_instances || 0;
+            
+            // Calculate parts fitted from results array
+            let partsFitted = 0;
+            if (result.results && result.results.length > 0) {
+                partsFitted = result.results.reduce((sum, r) => sum + (r.total_parts_nested || 0), 0);
+            }
+            
+            const boardsUsed = result.total_boards_used || 0;
+            const utilization = (result.total_utilization || 0) * 100; // Convert to percentage
+            const scrapPercentage = (result.total_scrap_percentage || 0) * 100; // Convert to percentage
+            
+            console.log('[NESTING] Parsed metrics:', {
+                isSuccess,
+                totalParts,
+                partsFitted,
+                boardsUsed,
+                utilization,
+                scrapPercentage,
+                partsSummary,
+                results: result.results?.length || 0
+            });
+            
+            // Get material info from current optimization data or form
+            const materialSelect = document.getElementById('material');
+            const thicknessSelect = document.getElementById('thickness');
+            const selectedMaterial = materialSelect ? materialSelect.value : 'Steel';
+            const selectedThickness = thicknessSelect ? parseFloat(thicknessSelect.value) : 1.0;
 
             resultsDiv.innerHTML = `
-                <h3>🔧 Nesting Results</h3>
-                <div class="nesting-summary">
-                    <div class="summary-item">
-                        <label>Material:</label>
-                        <span>${summary.material} (${summary.thickness_mm}mm)</span>
-                    </div>
-                    <div class="summary-item">
-                        <label>Parts to nest:</label>
-                        <span>${summary.total_parts} unique parts, ${summary.total_instances} total pieces</span>
-                    </div>
-                </div>
-
-                ${bestBoard ? `
-                <div class="best-board">
-                    <h4>🏆 Recommended Board</h4>
-                    <div class="board-details">
-                        <div class="board-info">
-                            <span class="board-size">${bestBoard.board.width_mm} × ${bestBoard.board.height_mm} mm</span>
-                            <span class="board-cost">$${bestBoard.board.cost_per_sheet}/sheet</span>
+                <!-- Advanced Optimization Controls -->
+                <div class="advanced-optimization-panel">
+                    <div class="optimization-header">
+                        <div class="optimization-title">
+                            <span class="optimization-icon">⚡</span>
+                            <h4>Advanced Nesting Optimization</h4>
                         </div>
-                        <div class="utilization-info">
-                            <div class="utilization-bar">
-                                <div class="utilization-fill" style="width: ${(bestBoard.utilization * 100).toFixed(1)}%"></div>
-                            </div>
-                            <span class="utilization-text">${(bestBoard.utilization * 100).toFixed(1)}% utilization</span>
-                        </div>
-                        <div class="parts-fitted">
-                            <span class="${bestBoard.fitting_success ? 'success' : 'warning'}">
-                                ${bestBoard.total_parts_nested}/${bestBoard.total_parts_required} parts fit
-                                ${bestBoard.fitting_success ? '✅' : '⚠️'}
+                        <div class="optimization-stats">
+                            <span class="stat-item">
+                                <span class="stat-label">Material:</span>
+                                <span class="stat-value">${selectedMaterial} (${selectedThickness}mm)</span>
+                            </span>
+                            <span class="stat-item">
+                                <span class="stat-label">Parts:</span>
+                                <span class="stat-value">${partsFitted}/${totalParts}</span>
+                            </span>
+                            <span class="stat-item">
+                                <span class="stat-label">Boards:</span>
+                                <span class="stat-value">${boardsUsed}</span>
+                            </span>
+                            <span class="stat-item">
+                                <span class="stat-label">Utilization:</span>
+                                <span class="stat-value">${utilization.toFixed(1)}%</span>
                             </span>
                         </div>
-                        <div class="scrap-info">
-                            ${bestBoard.scrap_percentage > 0 ? 
-                                `<span class="scrap">Scrap: ${(bestBoard.scrap_percentage * 100).toFixed(1)}%</span>` :
-                                `<span class="leftover">Leftover: ${bestBoard.leftover_parts.length > 0 ? (bestBoard.leftover_parts[0].percentage * 100).toFixed(1) + '%' : '0%'}</span>`
-                            }
+                    </div>
+                    
+                    <div class="optimization-controls">
+                        <div class="control-section">
+                            <div class="control-buttons">
+                                <button id="startOptimizationBtn" class="optimization-btn start-btn" onclick="startContinuousOptimization()">
+                                    <span class="btn-icon">🚀</span>
+                                    <span class="btn-text">Start Continuous Optimization</span>
+                                    <span class="btn-subtitle">AI-Powered Nesting Enhancement</span>
+                                </button>
+                                <button id="stopOptimizationBtn" class="optimization-btn stop-btn" onclick="stopContinuousOptimization()" style="display: none;">
+                                    <span class="btn-icon">⏹️</span>
+                                    <span class="btn-text">Stop Optimization</span>
+                                    <span class="btn-subtitle">End Current Process</span>
+                                </button>
+                            </div>
+                            
+                            <div id="optimizationStatus" class="optimization-status">
+                                <div class="status-indicator">
+                                    <div class="status-dot"></div>
+                                    <span class="status-text">Ready to optimize nesting efficiency with advanced algorithms</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="all-options">
-                    <h4>All Board Options</h4>
-                    <div class="board-options">
-                        ${result.results.map((option, index) => `
-                            <div class="board-option ${option === bestBoard ? 'recommended' : ''}">
+                ${!isSuccess ? `
+                <!-- Error Message -->
+                <div class="nesting-error" style="background-color: #ffebee; border: 1px solid #f44336; border-radius: 8px; padding: 16px; margin: 16px 0;">
+                    <div style="display: flex; align-items: center; color: #d32f2f;">
+                        <span style="font-size: 24px; margin-right: 12px;">❌</span>
+                        <div>
+                            <strong>No suitable boards found for nesting.</strong>
+                            <p style="margin: 8px 0 0 0; color: #666;">The system could not find boards in the database that can accommodate your parts. Please check:</p>
+                            <ul style="margin: 8px 0 0 20px; color: #666;">
+                                <li>Database connection is working</li>
+                                <li>Boards are available in the database</li>
+                                <li>Part dimensions are reasonable</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                ` : `
+                <!-- Success Message -->
+                <div class="nesting-success" style="background-color: #e8f5e8; border: 1px solid #4caf50; border-radius: 8px; padding: 16px; margin: 16px 0;">
+                    <div style="display: flex; align-items: center; color: #2e7d32;">
+                        <span style="font-size: 24px; margin-right: 12px;">✅</span>
+                        <div>
+                            <strong>Nesting completed successfully!</strong>
+                            <p style="margin: 8px 0 0 0; color: #666;">All parts have been nested with ${utilization.toFixed(1)}% utilization and ${scrapPercentage.toFixed(1)}% scrap.</p>
+                        </div>
+                    </div>
+                </div>
+                `}
+
+                ${isSuccess && result.results && result.results.length > 0 ? `
+                ` : ''}
+
+                ${isSuccess && result.results && result.results.length > 0 ? `
+                <!-- All Board Results -->
+                <div class="all-boards-visual">
+                    <h4>📊 ${result.multi_board_optimization ? 'All Boards Used in Optimization' : 'All Board Options'}</h4>
+                    <div class="boards-grid">
+                        ${(result.results || []).map((option, index) => `
+                            <div class="board-option-visual ${option === (result.boards_used && result.boards_used[0]) ? 'recommended' : ''} ${result.multi_board_optimization ? 'multi-board' : ''}">
                                 <div class="option-header">
-                                    <span class="option-size">${option.board.width_mm} × ${option.board.height_mm} mm</span>
-                                    <span class="option-cost">$${option.board.cost_per_sheet}</span>
-                                    ${option === bestBoard ? '<span class="recommended-badge">RECOMMENDED</span>' : ''}
+                                    <span class="option-size">${option.board?.width_mm || option.board_width || 0} × ${option.board?.height_mm || option.board_height || 0} mm</span>
+                                    ${option === (result.boards_used && result.boards_used[0]) ? '<span class="recommended-badge">PRIMARY</span>' : ''}
+                                    ${result.multi_board_optimization ? `<span class="board-number">Board ${index + 1}</span>` : ''}
                                 </div>
-                                <div class="option-details">
-                                    <span>Utilization: ${(option.utilization * 100).toFixed(1)}%</span>
-                                    <span>Parts: ${option.total_parts_nested}/${option.total_parts_required}</span>
-                                    <span>
-                                        ${option.scrap_percentage > 0 ? 
-                                            `Scrap: ${(option.scrap_percentage * 100).toFixed(1)}%` :
-                                            `Leftover: ${option.leftover_parts.length > 0 ? (option.leftover_parts[0].percentage * 100).toFixed(1) + '%' : '0%'}`
-                                        }
-                                    </span>
+                                <div class="option-visual">
+                                    ${option.svg_layout ? 
+                                        `<div class="mini-svg-container">${option.svg_layout}</div>` : 
+                                        '<div class="no-visual">No layout</div>'
+                                    }
+                                </div>
+                                <div class="option-metrics">
+                                    <span class="metric-item">Utilization: ${(option.utilization * 100).toFixed(1)}%</span>
+                                    <span class="metric-item">Parts: ${option.total_parts_nested || 0}/${option.total_parts_required || 0}</span>
+                                    <span class="metric-item">Scrap: ${(option.scrap_percentage * 100).toFixed(1)}%</span>
+                                    ${option.optimization_iterations ? `<span class="metric-item">Iterations: ${option.optimization_iterations}</span>` : ''}
                                 </div>
                             </div>
                         `).join('')}
                     </div>
                 </div>
-                ` : '<div class="no-results">No suitable boards found for nesting.</div>'}
+                ` : '<div class="no-results">❌ No suitable boards found for nesting.</div>'}
             `;
 
-            // Add CSS styles if not already added
-            if (!document.getElementById('nestingStyles')) {
-                const style = document.createElement('style');
-                style.id = 'nestingStyles';
-                style.textContent = `
-                    .nesting-results {
-                        margin: 20px 0;
-                        padding: 20px;
-                        background: #f8f9fa;
-                        border-radius: 8px;
-                        border: 1px solid #dee2e6;
-                    }
-                    .nesting-summary {
-                        margin-bottom: 15px;
-                    }
-                    .summary-item {
-                        display: flex;
-                        justify-content: space-between;
-                        margin-bottom: 5px;
-                    }
-                    .summary-item label {
-                        font-weight: bold;
-                        color: #495057;
-                    }
-                    .best-board {
-                        margin: 15px 0;
-                        padding: 15px;
-                        background: white;
-                        border-radius: 6px;
-                        border: 2px solid #28a745;
-                    }
-                    .board-details {
-                        margin-top: 10px;
-                    }
-                    .board-info {
-                        display: flex;
-                        justify-content: space-between;
-                        margin-bottom: 10px;
-                    }
-                    .board-size {
-                        font-weight: bold;
-                        font-size: 1.1em;
-                    }
-                    .board-cost {
-                        color: #28a745;
-                        font-weight: bold;
-                    }
-                    .utilization-info {
-                        margin-bottom: 10px;
-                    }
-                    .utilization-bar {
-                        width: 100%;
-                        height: 20px;
-                        background: #e9ecef;
-                        border-radius: 10px;
-                        overflow: hidden;
-                        margin-bottom: 5px;
-                    }
-                    .utilization-fill {
-                        height: 100%;
-                        background: linear-gradient(90deg, #28a745, #20c997);
-                        transition: width 0.3s ease;
-                    }
-                    .utilization-text {
-                        font-weight: bold;
-                        color: #495057;
-                    }
-                    .parts-fitted .success {
-                        color: #28a745;
-                        font-weight: bold;
-                    }
-                    .parts-fitted .warning {
-                        color: #ffc107;
-                        font-weight: bold;
-                    }
-                    .scrap-info .scrap {
-                        color: #dc3545;
-                        font-weight: bold;
-                    }
-                    .scrap-info .leftover {
-                        color: #17a2b8;
-                        font-weight: bold;
-                    }
-                    .board-options {
-                        display: grid;
-                        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                        gap: 10px;
-                        margin-top: 10px;
-                    }
-                    .board-option {
-                        padding: 10px;
-                        background: white;
-                        border-radius: 4px;
-                        border: 1px solid #dee2e6;
-                    }
-                    .board-option.recommended {
-                        border-color: #28a745;
-                        background: #f8fff9;
-                    }
-                    .option-header {
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: center;
-                        margin-bottom: 5px;
-                    }
-                    .option-size {
-                        font-weight: bold;
-                    }
-                    .recommended-badge {
-                        background: #28a745;
-                        color: white;
-                        padding: 2px 6px;
-                        border-radius: 3px;
-                        font-size: 0.8em;
-                    }
-                    .option-details {
-                        display: flex;
-                        flex-direction: column;
-                        gap: 3px;
-                        font-size: 0.9em;
-                        color: #6c757d;
-                    }
-                    .no-results {
-                        text-align: center;
-                        color: #6c757d;
-                        font-style: italic;
-                        padding: 20px;
-                    }
-                `;
-                document.head.appendChild(style);
+            // Add visual nesting CSS styles if not already added
+            addVisualNestingStyles();
+        }
+
+        async function startContinuousOptimization() {
+            if (isOptimizing || !currentOptimizationData) return;
+
+            isOptimizing = true;
+            const startBtn = document.getElementById('startOptimizationBtn');
+            const stopBtn = document.getElementById('stopOptimizationBtn');
+            
+            if (startBtn) {
+                startBtn.disabled = true;
+                startBtn.textContent = '🔄 Optimizing...';
             }
+            if (stopBtn) {
+                stopBtn.disabled = false;
+                stopBtn.style.display = 'inline-block';
+            }
+
+            // Update optimization status
+            updateOptimizationStatus('Starting continuous optimization with advanced rotation algorithms...', 0);
+
+            let iteration = 0;
+            optimizationInterval = setInterval(async () => {
+                if (!isOptimizing) return;
+
+                iteration++;
+                try {
+                    // Get current material selection (in case user changed it)
+                    const materialSelect = document.getElementById('material');
+                    const thicknessSelect = document.getElementById('thickness');
+                    const selectedMaterial = materialSelect ? materialSelect.value : 'Steel';
+                    const selectedThickness = thicknessSelect ? parseFloat(thicknessSelect.value) : 1.0;
+
+                    // Use the stored optimization data with current material settings
+                    const meaningfulParts = currentOptimizationData.meaningful_parts || [];
+                    
+                    if (meaningfulParts.length === 0) {
+                        throw new Error('No parts data available for optimization.');
+                    }
+                    
+                    const optimizationData = {
+                        meaningful_parts: meaningfulParts.map(part => ({
+                            id: part.id || part.part_number || Math.random().toString(36).substr(2, 9),
+                            length_mm: part.length_mm || part.length || 0,
+                            width_mm: part.width_mm || part.width || 0,
+                            quantity: part.quantity || 1,
+                            material_id: selectedMaterial.toLowerCase(),
+                            priority: 1,
+                            rotation_allowed: part.rotation_allowed !== false
+                        })),
+                        extracted_part_labels: currentOptimizationData.extracted_part_labels || {},
+                        part_images: currentOptimizationData.part_images || [],
+                        material_name: selectedMaterial,
+                        thickness_mm: selectedThickness,
+                        scrap_threshold: 0.20,
+                        continuous_optimization: true,
+                        max_boards: 10
+                    };
+
+                    updateOptimizationStatus(`🔄 Running optimization iteration ${iteration} with advanced rotation algorithms...`, iteration);
+                    
+                    const response = await fetch('/api/nesting/calculate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(optimizationData)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Server error: ${await response.text()}`);
+                    }
+
+                    const result = await response.json();
+                    
+                    // Update the display with new results
+                    displayVisualNestingResults(result);
+                    
+                    const utilization = result.total_utilization ? (result.total_utilization * 100).toFixed(1) : '0';
+                    const fitted = result.parts_fitted || 0;
+                    const total = result.parts_total || 0;
+                    const boardsUsed = result.total_boards_used || 1;
+                    const totalScrap = result.total_scrap_percentage ? (result.total_scrap_percentage * 100).toFixed(1) : '0';
+                    
+                    updateOptimizationStatus(`✅ Iteration ${iteration} complete! ${boardsUsed} boards, ${utilization}% utilization, ${fitted}/${total} parts fitted, ${totalScrap}% scrap`, iteration);
+
+                } catch (error) {
+                    console.error('[OPTIMIZATION] Error in iteration:', error);
+                    updateOptimizationStatus(`❌ Error in iteration ${iteration}: ${error.message}`, iteration);
+                }
+            }, 3000); // Run optimization every 3 seconds for faster feedback
+        }
+
+        function stopContinuousOptimization() {
+            isOptimizing = false;
+            if (optimizationInterval) {
+                clearInterval(optimizationInterval);
+                optimizationInterval = null;
+            }
+
+            const startBtn = document.getElementById('startOptimizationBtn');
+            const stopBtn = document.getElementById('stopOptimizationBtn');
+            
+            if (startBtn) {
+                startBtn.disabled = false;
+                startBtn.textContent = '🚀 Start Continuous Optimization';
+            }
+            if (stopBtn) {
+                stopBtn.disabled = true;
+                stopBtn.style.display = 'none';
+            }
+
+            updateOptimizationStatus('⏹️ Optimization stopped. Current results show the best nesting configuration found.', 0);
+            showSuccess('Continuous optimization stopped. The displayed layout represents the optimal nesting configuration.');
+        }
+
+        function updateOptimizationStatus(message, iteration) {
+            const statusElement = document.getElementById('optimizationStatus');
+            if (statusElement) {
+                statusElement.innerHTML = `
+                    <div class="optimization-message">
+                        <span class="status-text">${message}</span>
+                        ${iteration > 0 ? `<span class="iteration-count">🔢 Iteration: ${iteration}</span>` : ''}
+                    </div>
+                `;
+            }
+        }
+
+        function addVisualNestingStyles() {
+            if (document.getElementById('visualNestingStyles')) return;
+            
+            const style = document.createElement('style');
+            style.id = 'visualNestingStyles';
+            style.textContent = `
+                .visual-nesting-results {
+                    margin: 20px 0;
+                    padding: 20px;
+                    background: #f8f9fa;
+                    border-radius: 12px;
+                    border: 1px solid #dee2e6;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+                
+                .nesting-summary {
+                    margin-bottom: 20px;
+                    padding: 15px;
+                    background: white;
+                    border-radius: 8px;
+                    border: 1px solid #e9ecef;
+                }
+                
+                .summary-item {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 8px;
+                    padding: 5px 0;
+                    border-bottom: 1px solid #f1f3f4;
+                }
+                
+                .summary-item:last-child { border-bottom: none; }
+                
+                .summary-item label {
+                    font-weight: bold;
+                    color: #495057;
+                }
+
+                .advanced-optimization-panel {
+                    margin: 20px 0;
+                    background: linear-gradient(135deg, #262626 0%, #2a5298 100%);
+                    border-radius: 16px;
+                    border: 1px solid #ff8c00;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+                    overflow: hidden;
+                }
+
+                .optimization-header {
+                    padding: 24px;
+                    background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+                    border-bottom: 1px solid rgba(255,255,255,0.1);
+                }
+
+                .optimization-title {
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 20px;
+                }
+
+                .optimization-icon {
+                    font-size: 24px;
+                    margin-right: 12px;
+                    background: linear-gradient(45deg, #ffd700, #ffed4e);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                    background-clip: text;
+                }
+
+                .optimization-title h4 {
+                    margin: 0;
+                    color: white;
+                    font-family: 'Orbitron', monospace;
+                    font-weight: 700;
+                    font-size: 18px;
+                    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                }
+
+                .optimization-stats {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 16px;
+                }
+
+                .stat-item {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    padding: 12px;
+                    background: rgba(255,255,255,0.08);
+                    border-radius: 8px;
+                    border: 1px solid rgba(255,255,255,0.1);
+                }
+
+                .stat-label {
+                    font-size: 12px;
+                    color: rgba(255,255,255,0.7);
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    margin-bottom: 4px;
+                }
+
+                .stat-value {
+                    font-size: 16px;
+                    font-weight: 700;
+                    color: white;
+                    font-family: 'Orbitron', monospace;
+                }
+
+                .optimization-controls {
+                    padding: 24px;
+                }
+
+                .control-section {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 20px;
+                }
+
+                .control-buttons {
+                    display: flex;
+                    gap: 16px;
+                    justify-content: center;
+                }
+
+                .optimization-btn {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    padding: 20px 32px;
+                    border: none;
+                    border-radius: 12px;
+                    cursor: pointer;
+                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                    font-family: 'Orbitron', monospace;
+                    font-weight: 600;
+                    min-width: 200px;
+                    position: relative;
+                    overflow: hidden;
+                }
+
+                .optimization-btn::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: -100%;
+                    width: 100%;
+                    height: 100%;
+                    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+                    transition: left 0.5s;
+                }
+
+                .optimization-btn:hover::before {
+                    left: 100%;
+                }
+
+                .start-btn {
+                    background: linear-gradient(135deg, #FF6B00 0%, #20c997 100%);
+                    color: white;
+                    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+                }
+
+                .start-btn:hover:not(:disabled) {
+                    transform: translateY(-3px);
+                    box-shadow: 0 8px 25px rgba(40, 167, 69, 0.4);
+                }
+
+                .start-btn:disabled {
+                    background: linear-gradient(135deg, #6c757d 0%, #868e96 100%);
+                    cursor: not-allowed;
+                    transform: none;
+                    box-shadow: none;
+                }
+
+                .stop-btn {
+                    background: linear-gradient(135deg, #dc3545 0%, #e74c3c 100%);
+                    color: white;
+                    box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3);
+                }
+
+                .stop-btn:hover:not(:disabled) {
+                    transform: translateY(-3px);
+                    box-shadow: 0 8px 25px rgba(220, 53, 69, 0.4);
+                }
+
+                .btn-icon {
+                    font-size: 24px;
+                    margin-bottom: 8px;
+                }
+
+                .btn-text {
+                    font-size: 16px;
+                    font-weight: 700;
+                    margin-bottom: 4px;
+                }
+
+                .btn-subtitle {
+                    font-size: 12px;
+                    opacity: 0.8;
+                    font-weight: 400;
+                }
+
+                .optimization-status {
+                    background: rgba(255,255,255,0.05);
+                    padding: 16px;
+                    border-radius: 8px;
+                    border: 1px solid rgba(255,255,255,0.1);
+                }
+
+                .status-indicator {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }
+
+                .status-dot {
+                    width: 8px;
+                    height: 8px;
+                    background: #28a745;
+                    border-radius: 50%;
+                    animation: pulse 2s infinite;
+                }
+
+                @keyframes pulse {
+                    0% { opacity: 1; }
+                    50% { opacity: 0.5; }
+                    100% { opacity: 1; }
+                }
+
+                .status-text {
+                    color: rgba(255,255,255,0.9);
+                    font-size: 14px;
+                    font-weight: 500;
+                }
+
+                .status-text {
+                    flex: 1;
+                    margin-right: 10px;
+                }
+
+                .iteration-count {
+                    background: rgba(255,255,255,0.2);
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    font-weight: bold;
+                }
+
+                .best-board-visual {
+                    margin: 20px 0;
+                    padding: 20px;
+                    background: white;
+                    border-radius: 12px;
+                    border: 3px solid #28a745;
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                }
+
+                .best-board-visual h4 {
+                    margin: 0 0 20px 0;
+                    color: #28a745;
+                }
+
+                .board-results-visual h4 {
+                    margin: 0 0 20px 0;
+                    color: #ff8c00;
+                    font-family: 'Orbitron', monospace;
+                    font-weight: 700;
+                    font-size: 1.4em;
+                    text-transform: uppercase;
+                    letter-spacing: 2px;
+                    text-shadow: 0 0 10px rgba(255, 140, 0, 0.5);
+                    text-align: center;
+                }
+
+                .board-visual-container {
+                    display: grid;
+                    grid-template-columns: 1fr 2fr;
+                    gap: 20px;
+                    align-items: start;
+                }
+
+                .board-info-panel {
+                    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
+                    padding: 20px;
+                    border-radius: 15px;
+                    border: 2px solid #ff8c00;
+                    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+                    position: relative;
+                    overflow: hidden;
+                }
+
+                .board-info-panel::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    height: 4px;
+                    background: linear-gradient(90deg, #ff8c00 0%, #ff6600 50%, #ff8c00 100%);
+                }
+
+                .board-header {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 20px;
+                    padding-bottom: 15px;
+                    border-bottom: 2px solid rgba(255, 140, 0, 0.3);
+                }
+
+                .board-size {
+                    font-weight: 700;
+                    font-size: 1.3em;
+                    color: #ff8c00;
+                    font-family: 'Orbitron', monospace;
+                    letter-spacing: 1px;
+                }
+
+                .board-tag {
+                    background: linear-gradient(135deg, #ff8c00 0%, #ff6600 100%);
+                    color: white;
+                    padding: 6px 12px;
+                    border-radius: 15px;
+                    font-size: 0.9em;
+                    font-weight: 700;
+                    font-family: 'Orbitron', monospace;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    box-shadow: 0 3px 10px rgba(255, 140, 0, 0.3);
+                }
+
+                .metrics-grid {
+                    display: grid;
+                    gap: 20px;
+                }
+
+                .metric {
+                    background: rgba(255, 255, 255, 0.95);
+                    padding: 15px;
+                    border-radius: 10px;
+                    border: 1px solid rgba(255, 140, 0, 0.2);
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+                }
+
+                .metric-label {
+                    display: block;
+                    font-weight: 700;
+                    color: #1a1a1a;
+                    font-size: 0.9em;
+                    font-family: 'Orbitron', monospace;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    margin-bottom: 8px;
+                }
+
+                .metric-value {
+                    display: block;
+                    font-weight: 700;
+                    font-size: 1.4em;
+                    font-family: 'Orbitron', monospace;
+                    letter-spacing: 1px;
+                }
+
+                .metric-value.utilization {
+                    color: #20c997;
+                    text-shadow: 0 0 5px rgba(32, 201, 151, 0.3);
+                }
+
+                .metric-value.scrap {
+                    color: #ffc107;
+                    text-shadow: 0 0 5px rgba(255, 193, 7, 0.3);
+                }
+
+                .metric-value.success {
+                    color: #28a745;
+                    text-shadow: 0 0 5px rgba(40, 167, 69, 0.3);
+                }
+
+                .metric-value.warning {
+                    color: #fd7e14;
+                    text-shadow: 0 0 5px rgba(253, 126, 20, 0.3);
+                }
+
+                .metric-bar {
+                    width: 100%;
+                    height: 8px;
+                    background: linear-gradient(90deg, #333 0%, #444 50%, #333 100%);
+                    border-radius: 4px;
+                    overflow: hidden;
+                    margin-top: 8px;
+                    border: 1px solid #555;
+                    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+                }
+
+                .metric-fill {
+                    height: 100%;
+                    transition: width 0.5s ease;
+                    position: relative;
+                }
+
+                .utilization-fill {
+                    background: linear-gradient(90deg, #20c997 0%, #17a2b8 50%, #20c997 100%);
+                    box-shadow: 0 0 10px rgba(32, 201, 151, 0.6);
+                }
+
+                .utilization-fill::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+                    animation: progressShine 1.5s infinite;
+                }
+
+                .metric-value.warning { color: #ffc107; }
+                .metric-value.scrap { color: #dc3545; }
+
+                .metric-bar {
+                    width: 100%;
+                    height: 8px;
+                    background: #e9ecef;
+                    border-radius: 4px;
+                    overflow: hidden;
+                }
+
+                .metric-fill {
+                    height: 100%;
+                    transition: width 0.5s ease;
+                }
+
+                .utilization-fill {
+                    background: linear-gradient(90deg, #17a2b8, #20c997);
+                }
+
+                .board-visual-svg {
+                    background: white;
+                    border-radius: 8px;
+                    border: 2px solid #e9ecef;
+                    padding: 10px;
+                    min-height: 300px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                .board-visual-svg svg {
+                    max-width: 100%;
+                    max-height: 100%;
+                    border-radius: 4px;
+                }
+
+                .no-svg {
+                    color: #6c757d;
+                    font-style: italic;
+                    text-align: center;
+                }
+
+                .all-boards-visual {
+                    margin: 20px 0;
+                }
+
+                .all-boards-visual h4 {
+                    margin: 0 0 20px 0;
+                    color: #ff8c00;
+                    font-family: 'Orbitron', monospace;
+                    font-weight: 700;
+                    font-size: 1.4em;
+                    text-transform: uppercase;
+                    letter-spacing: 2px;
+                    text-shadow: 0 0 10px rgba(255, 140, 0, 0.5);
+                    text-align: center;
+                }
+
+                .boards-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+                    gap: 15px;
+                }
+
+                .board-option-visual {
+                    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
+                    border-radius: 15px;
+                    border: 2px solid #ff8c00;
+                    padding: 20px;
+                    transition: all 0.3s ease;
+                    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+                    position: relative;
+                    overflow: hidden;
+                }
+
+                .board-option-visual::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    height: 4px;
+                    background: linear-gradient(90deg, #ff8c00 0%, #ff6600 50%, #ff8c00 100%);
+                }
+
+                .board-option-visual:hover {
+                    border-color: #ff6600;
+                    box-shadow: 0 15px 40px rgba(255, 140, 0, 0.4);
+                    transform: translateY(-2px);
+                }
+
+                .board-option-visual.recommended {
+                    border-color: #20c997;
+                    background: linear-gradient(135deg, #1a3a1a 0%, #2d4d2d 50%, #1a3a1a 100%);
+                    box-shadow: 0 15px 40px rgba(32, 201, 151, 0.4);
+                }
+
+                .board-option-visual.recommended::before {
+                    background: linear-gradient(90deg, #20c997 0%, #17a2b8 50%, #20c997 100%);
+                }
+
+                .option-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 15px;
+                    padding-bottom: 12px;
+                    border-bottom: 2px solid rgba(255, 140, 0, 0.3);
+                }
+
+                .option-size {
+                    font-weight: 700;
+                    color: #ff8c00;
+                    font-size: 1.1em;
+                    font-family: 'Orbitron', monospace;
+                    letter-spacing: 1px;
+                }
+
+                .recommended-badge {
+                    background: linear-gradient(135deg, #20c997 0%, #17a2b8 100%);
+                    color: white;
+                    padding: 6px 12px;
+                    border-radius: 15px;
+                    font-size: 0.8em;
+                    font-weight: 700;
+                    font-family: 'Orbitron', monospace;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    box-shadow: 0 3px 10px rgba(32, 201, 151, 0.3);
+                }
+
+                .option-visual {
+                    margin: 10px 0;
+                    min-height: 150px;
+                    background: #f8f9fa;
+                    border-radius: 4px;
+                    border: 1px solid #e9ecef;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                .mini-svg-container {
+                    width: 100%;
+                    height: 100%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                .mini-svg-container svg {
+                    max-width: 100%;
+                    max-height: 140px;
+                }
+
+                .no-visual {
+                    color: #6c757d;
+                    font-style: italic;
+                    font-size: 12px;
+                }
+
+                .option-metrics {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+                    gap: 5px;
+                    margin-top: 10px;
+                }
+
+                .metric-item {
+                    font-size: 11px;
+                    color: #6c757d;
+                    background: #f1f3f4;
+                    padding: 4px 6px;
+                    border-radius: 3px;
+                    text-align: center;
+                }
+
+                .no-results {
+                    text-align: center;
+                    color: #dc3545;
+                    font-size: 18px;
+                    font-weight: bold;
+                    padding: 40px 20px;
+                    background: #f8d7da;
+                    border: 2px solid #f5c6cb;
+                    border-radius: 8px;
+                }
+
+                .multi-board-summary {
+                    margin: 20px 0;
+                    padding: 20px;
+                    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+                    border-radius: 12px;
+                    color: white;
+                }
+
+                .multi-board-summary h4 {
+                    margin: 0 0 15px 0;
+                    color: white;
+                    font-size: 1.3em;
+                }
+
+                .summary-metrics {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                    gap: 15px;
+                }
+
+                .summary-metric {
+                    background: rgba(255,255,255,0.1);
+                    padding: 12px;
+                    border-radius: 8px;
+                    border: 1px solid rgba(255,255,255,0.2);
+                    text-align: center;
+                }
+
+                .summary-metric .metric-label {
+                    display: block;
+                    font-size: 12px;
+                    color: rgba(255,255,255,0.8);
+                    font-weight: bold;
+                    margin-bottom: 5px;
+                }
+
+                .summary-metric .metric-value {
+                    display: block;
+                    font-size: 18px;
+                    font-weight: bold;
+                    color: white;
+                }
+
+                .summary-metric .metric-value.utilization { color: #20c997; }
+                .summary-metric .metric-value.scrap { color: #ffc107; }
+                .summary-metric .metric-value.success { color: #28a745; }
+                .summary-metric .metric-value.warning { color: #ffc107; }
+
+                .board-option-visual.multi-board {
+                    
+                    background: #f8fff9;
+                    position: relative;
+                }
+
+                .board-option-visual.multi-board::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    height: 4px;
+                    
+                    border-radius: 4px 4px 0 0;
+                }
+
+                .board-number {
+                    background: linear-gradient(135deg, #ff8c00 0%, #ff6600 100%);
+                    color: white;
+                    padding: 6px 12px;
+                    border-radius: 15px;
+                    font-size: 0.8em;
+                    font-weight: 700;
+                    font-family: 'Orbitron', monospace;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    box-shadow: 0 3px 10px rgba(255, 140, 0, 0.3);
+                    margin-left: 8px;
+                }
+
+                .recommended-badge {
+                    background: linear-gradient(135deg, #20c997 0%, #17a2b8 100%);
+                    color: white;
+                    padding: 6px 12px;
+                    border-radius: 15px;
+                    font-size: 0.8em;
+                    font-weight: 700;
+                    font-family: 'Orbitron', monospace;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    box-shadow: 0 3px 10px rgba(32, 201, 151, 0.3);
+                }
+
+                @media (max-width: 768px) {
+                    .board-visual-container {
+                        grid-template-columns: 1fr;
+                    }
+                    
+                    .boards-grid {
+                        grid-template-columns: 1fr;
+                    }
+                    
+                    .control-buttons {
+                        flex-direction: column;
+                    }
+                    
+                    .optimization-message {
+                        flex-direction: column;
+                        align-items: flex-start;
+                        gap: 8px;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
         }
 
         const nestBtn = document.getElementById('nestMetricsBtn');
@@ -5282,10 +6709,10 @@
         async function calculateQuote() {
             try {
                 const calcBtn = document.getElementById('calcQuoteBtn');
-                if (calcBtn) { calcBtn.disabled = true; calcBtn.textContent = 'Calculating…'; }
+                if (calcBtn) { calcBtn.disabled = true; calcBtn.innerHTML = '⚡ CALCULATING...'; }
                 if (!window.__lastFile) {
                     showError('Please upload and analyze a DXF first.');
-                    if (calcBtn) { calcBtn.disabled = false; calcBtn.textContent = 'Calculate Quote'; }
+                    if (calcBtn) { calcBtn.disabled = false; calcBtn.innerHTML = '⚡ CALCULATE QUOTE'; }
                     return;
                 }
 
@@ -5374,7 +6801,7 @@
                 if (!resp.ok || !data.success) {
                     showError(data.error || 'Failed to calculate quote.');
                     const calcBtn2 = document.getElementById('calcQuoteBtn');
-                    if (calcBtn2) { calcBtn2.disabled = false; calcBtn2.textContent = 'Calculate Quote'; }
+                    if (calcBtn2) { calcBtn2.disabled = false; calcBtn2.innerHTML = '⚡ CALCULATE QUOTE'; }
                     return;
                 }
                 showResults(data);
@@ -5385,7 +6812,7 @@
                     setTimeout(() => { successMessage.style.display = 'none'; }, 4000);
                 }
                 const calcBtn3 = document.getElementById('calcQuoteBtn');
-                if (calcBtn3) { calcBtn3.disabled = false; calcBtn3.textContent = 'Calculate Quote'; }
+                if (calcBtn3) { calcBtn3.disabled = false; calcBtn3.innerHTML = '⚡ CALCULATE QUOTE'; }
             } catch (e) {
                 const processing = document.getElementById('processing');
                 if (processing) processing.style.display = 'none';
@@ -5393,7 +6820,7 @@
                 if (progressContainer) progressContainer.style.display = 'none';
                 showError('Network error: ' + (e.message || e));
                 const calcBtn = document.getElementById('calcQuoteBtn');
-                if (calcBtn) { calcBtn.disabled = false; calcBtn.textContent = 'Calculate Quote'; }
+                if (calcBtn) { calcBtn.disabled = false; calcBtn.innerHTML = '⚡ CALCULATE QUOTE'; }
             }
         }
     </script>

@@ -936,17 +936,17 @@ HTML_TEMPLATE = r"""<!doctype html>
     <img class="logo" src="{{ logo_url }}" alt="Company Logo">
   </div>
   {% endif %}
-  
+  <div class="quotation-date">Date: {{ format_date_dd_mm_yyyy(pdf.quotationDate) or "–" }}</div>
 </header>
 <div class="quotation-info">
-    <h1>Budget Price for: {{ pdf.quotationNumber or "–" }}</h1>
-    <div class="quotation-date">Date: {{ pdf.quotationDate or "–" }}</div>
+<h1>Quotation Number: {{ pdf.quotationNumber or "–" }}</h1>
+    <h3>Budget Price +/-5%</h3>
   </div>
   <hr>
 <!-- Opening Statement -->
 <div class="opening-statement">
   <p><strong>Mr/Mrs {{ pdf.contactName or "Customer" }},</strong></p>
-  <p>We thank you for your inquiry and we are pleased to quote the following:</p>
+  <p>We thank you for your inquiry and we are pleased to give you a fast budget price for your order.</p>
   </div>
 
 <!-- Company Information Block -->
@@ -1101,7 +1101,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     </div>
 
     <div class="total-item total-final">
-      <span class="total-label">Total:</span>
+      <span class="total-label">Total VAT Included:</span>
       <span class="total-value">{{ format_currency(final_total) }}</span>
     </div>
 
@@ -1178,6 +1178,7 @@ body {
   margin-bottom: 20px;
   padding-bottom: 10px;
   border-bottom: 2px solid #000;
+  position: relative;
 }
 
 .quotation-info h1 {
@@ -1190,6 +1191,10 @@ body {
 .quotation-date {
   font-size: 12px;
   color: #333;
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-weight: bold;
 }
 
 .logo-container {
@@ -1585,6 +1590,38 @@ def format_list(items):
         return ""
     return ", ".join(str(item) for item in items)
 
+def format_date_dd_mm_yyyy(date_str):
+    """Format date string to DD-MM-YYYY format."""
+    if not date_str:
+        return ""
+    try:
+        # Try to parse various date formats
+        from datetime import datetime
+        # Common formats to try
+        formats = [
+            "%Y-%m-%d",      # 2025-01-15
+            "%d/%m/%Y",      # 15/01/2025
+            "%m/%d/%Y",      # 01/15/2025
+            "%d-%m-%Y",      # 15-01-2025
+            "%Y-%m-%d %H:%M:%S",  # 2025-01-15 10:30:00
+        ]
+        
+        parsed_date = None
+        for fmt in formats:
+            try:
+                parsed_date = datetime.strptime(date_str, fmt)
+                break
+            except ValueError:
+                continue
+        
+        if parsed_date:
+            return parsed_date.strftime("%d-%m-%Y")
+        else:
+            # If we can't parse it, return as-is
+            return date_str
+    except Exception:
+        return date_str
+
 
 # ----------------------- Core Service -----------------------
 
@@ -1689,6 +1726,7 @@ class DocGenerator:
             'format_area': format_area,
             'format_vgroove': format_vgroove,
             'format_list': format_list,
+            'format_date_dd_mm_yyyy': format_date_dd_mm_yyyy,
         })
         
         tmpl = env.from_string(html_tpl)

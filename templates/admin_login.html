@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Login - DXF Analyzer</title>
+    <title>Admin Login - NAGGIAR Metal Trading</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -12,88 +13,217 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+            font-family: 'Rajdhani', sans-serif;
+            background: url('/assets/wallpaper.jpg') center/cover no-repeat fixed;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 20px;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(20, 20, 20, 0.9) 100%);
+            z-index: 1;
+        }
+
+        /* Animated Metal Objects */
+        .metal-objects {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .metal-gear {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(45deg, #2d2d2d, #4a4a4a, #2d2d2d);
+            border-radius: 50%;
+            border: 3px solid #ff8c00;
+            animation: rotate 20s linear infinite;
+            opacity: 0.3;
+        }
+
+        .metal-gear:nth-child(1) {
+            top: 10%;
+            left: 10%;
+            animation-delay: 0s;
+        }
+
+        .metal-gear:nth-child(2) {
+            top: 20%;
+            right: 15%;
+            animation-delay: -5s;
+            width: 40px;
+            height: 40px;
+        }
+
+        .metal-gear:nth-child(3) {
+            bottom: 20%;
+            left: 20%;
+            animation-delay: -10s;
+            width: 80px;
+            height: 80px;
+        }
+
+        .metal-gear:nth-child(4) {
+            bottom: 10%;
+            right: 10%;
+            animation-delay: -15s;
+            width: 50px;
+            height: 50px;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
 
         .login-container {
-            background: white;
-            padding: 40px;
-            border-radius: 15px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 50px;
+            border-radius: 25px;
+            box-shadow: 
+                0 25px 50px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
             width: 100%;
-            max-width: 400px;
+            max-width: 500px;
+            position: relative;
+            z-index: 2;
+            border: 2px solid rgba(255, 140, 0, 0.3);
         }
 
         .login-header {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .logo-container {
+            margin-bottom: 25px;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 3px solid #ff8c00;
+            object-fit: cover;
+            margin: 0 auto 15px;
+            display: block;
+            box-shadow: 0 0 20px rgba(255, 140, 0, 0.5);
         }
 
         .login-header h1 {
-            color: #333;
-            font-size: 2em;
+            font-family: 'Orbitron', monospace;
+            color: #1a1a1a;
+            font-size: 2.2em;
             margin-bottom: 10px;
+            font-weight: 900;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+            letter-spacing: 2px;
         }
 
         .login-header p {
             color: #666;
             font-size: 1.1em;
+            font-weight: 500;
         }
 
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 25px;
+            position: relative;
         }
 
         .form-group label {
             display: block;
             margin-bottom: 8px;
-            color: #333;
-            font-weight: 500;
+            color: #2d2d2d;
+            font-weight: 600;
+            font-size: 1.1em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         .form-group input {
             width: 100%;
-            padding: 12px 15px;
+            padding: 15px 20px;
             border: 2px solid #e1e5e9;
-            border-radius: 8px;
+            border-radius: 12px;
             font-size: 16px;
-            transition: border-color 0.3s ease;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.9);
         }
 
         .form-group input:focus {
             outline: none;
-            border-color: #ff6600;
+            border-color: #ff8c00;
+            box-shadow: 0 0 15px rgba(255, 140, 0, 0.3);
+            transform: translateY(-2px);
         }
 
         .login-btn {
             width: 100%;
-            padding: 12px;
-            background: linear-gradient(135deg, #ff6600 0%, #ff8533 100%);
+            padding: 18px;
+            background: linear-gradient(135deg, #1a1a1a 0%, #ff8c00 50%, #1a1a1a 100%);
             color: white;
             border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
+            border-radius: 12px;
+            font-size: 1.2em;
+            font-weight: 700;
+            font-family: 'Orbitron', monospace;
             cursor: pointer;
-            transition: transform 0.2s ease;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .login-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .login-btn:hover::before {
+            left: 100%;
         }
 
         .login-btn:hover {
-            transform: translateY(-2px);
+            transform: translateY(-3px);
+            box-shadow: 0 15px 30px rgba(255, 140, 0, 0.4);
         }
 
         .error-message {
-            background: #fee;
-            color: #c33;
-            padding: 10px;
-            border-radius: 5px;
+            background: linear-gradient(135deg, #ffebee, #ffcdd2);
+            color: #c62828;
+            padding: 15px;
+            border-radius: 12px;
             margin-bottom: 20px;
-            border: 1px solid #fcc;
+            border: 2px solid #ef5350;
+            font-weight: 600;
+            text-align: center;
         }
 
         .back-link {
@@ -113,10 +243,21 @@
     </style>
 </head>
 <body>
+    <!-- Animated Metal Objects -->
+    <div class="metal-objects">
+        <div class="metal-gear"></div>
+        <div class="metal-gear"></div>
+        <div class="metal-gear"></div>
+        <div class="metal-gear"></div>
+    </div>
+
     <div class="login-container">
         <div class="login-header">
-            <h1>🔐 Admin Access</h1>
-            <p>Enter password to access admin panel</p>
+            <div class="logo-container">
+                <img src="/assets/logo2.jpg" alt="NAGGIAR Logo" class="logo">
+            </div>
+            <h1>ADMIN ACCESS</h1>
+            <p>NAGGIAR Metal Trading - System Administration</p>
         </div>
 
         {% if error %}

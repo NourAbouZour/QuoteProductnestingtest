@@ -3,33 +3,253 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User Registration - DXF Quotation System</title>
+    <title>User Registration - NAGGIAR Metal Trading</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-            min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px;
+            font-family: 'Rajdhani', sans-serif;
+            background: url('/assets/wallpaper.jpg') center/cover no-repeat fixed;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
         }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(129, 129, 129, 0.85) 0%, rgba(85, 84, 84, 0.9) 100%);
+            z-index: 1;
+        }
+
         .register-container {
-            background: white; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-            overflow: hidden; width: 100%; max-width: 480px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 25px;
+            box-shadow: 
+                0 25px 50px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            overflow: hidden;
+            width: 100%;
+            max-width: 550px;
+            position: relative;
+            z-index: 2;
+            border: 2px solid rgba(255, 140, 0, 0.3);
         }
-        .register-header { background: linear-gradient(135deg, #ff6600 0%, #ff8533 100%); color: white; padding: 30px; text-align: center; }
-        .register-header h1 { font-size: 2em; margin-bottom: 10px; font-weight: 300; }
-        .register-form { padding: 30px; }
-        .form-group { margin-bottom: 18px; }
-        .form-group label { display: block; margin-bottom: 8px; color: #333; font-weight: 600; font-size: 1.05em; }
-        .form-group input { width: 100%; padding: 12px 15px; border: 2px solid #e1e5e9; border-radius: 8px; font-size: 16px; transition: border-color 0.3s ease; }
-        .form-group input:focus { outline: none; border-color: #ff6600; }
-        .submit-btn { width: 100%; background: linear-gradient(135deg, #000000 0%, #ff6600 100%); color: white; border: none; padding: 14px; border-radius: 25px; font-size: 1.05em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; margin-top: 10px; }
-        .submit-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
-        .message { padding: 12px; border-radius: 8px; margin-bottom: 16px; font-weight: 600; }
-        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .back-link { text-align: center; margin: 15px 0 25px; }
-        .back-link a { color: #ff6600; text-decoration: none; font-weight: 600; }
-        .back-link a:hover { text-decoration: underline; }
+
+        .register-header {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
+            color: #ff8c00;
+            padding: 40px 30px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .register-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 140, 0, 0.1), transparent);
+            animation: shimmer 3s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .logo-container {
+            margin-bottom: 20px;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 3px solid #ff8c00;
+            object-fit: cover;
+            margin: 0 auto 15px;
+            display: block;
+            box-shadow: 0 0 20px rgba(255, 140, 0, 0.5);
+        }
+
+        .register-header h1 {
+            font-family: 'Orbitron', monospace;
+            font-size: 2.2em;
+            margin-bottom: 10px;
+            font-weight: 900;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            letter-spacing: 2px;
+        }
+
+        .register-header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+            font-weight: 400;
+            color: #ccc;
+        }
+
+        .register-form {
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.98);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #2d2d2d;
+            font-weight: 600;
+            font-size: 1.05em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 15px 20px;
+            border: 2px solid #e1e5e9;
+            border-radius: 12px;
+            font-size: 16px;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #ff8c00;
+            box-shadow: 0 0 15px rgba(255, 140, 0, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .submit-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #1a1a1a 0%, #ff8c00 50%, #1a1a1a 100%);
+            color: white;
+            border: none;
+            padding: 18px;
+            border-radius: 12px;
+            font-size: 1.2em;
+            font-weight: 700;
+            font-family: 'Orbitron', monospace;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .submit-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .submit-btn:hover::before {
+            left: 100%;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 30px rgba(255, 140, 0, 0.4);
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .error {
+            background: linear-gradient(135deg, #ffebee, #ffcdd2);
+            color: #c62828;
+            border: 2px solid #ef5350;
+        }
+
+        .success {
+            background: linear-gradient(135deg, #e8f5e8, #c8e6c9);
+            color: #2e7d32;
+            border: 2px solid #4caf50;
+        }
+
+        .back-link {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .back-link a {
+            color: #ff8c00;
+            text-decoration: none;
+            font-weight: 700;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .back-link a:hover {
+            text-decoration: underline;
+            color: #ff6600;
+        }
+
+        /* Metal texture overlay */
+        .metal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 20%, rgba(255, 140, 0, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(255, 140, 0, 0.05) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        /* Responsive design */
+        @media (max-width: 480px) {
+            .register-container {
+                margin: 10px;
+                border-radius: 20px;
+            }
+            
+            .register-form {
+                padding: 30px 20px;
+            }
+            
+            .register-header {
+                padding: 30px 20px;
+            }
+        }
     </style>
     <script>
         function preventEmptySubmit(e) {
@@ -55,9 +275,13 @@
     </head>
 <body>
     <div class="register-container">
+        <div class="metal-overlay"></div>
         <div class="register-header">
-            <h1>📝 Create Account</h1>
-            <p>Sign up to access the DXF Quotation System</p>
+            <div class="logo-container">
+                <img src="/assets/logo2.jpg" alt="NAGGIAR Logo" class="logo">
+            </div>
+            <h1>JOIN NAGGIAR SAL</h1>
+            <p>Create your professional account for DXF Processing</p>
         </div>
         <div class="register-form">
             {% with messages = get_flashed_messages(with_categories=true) %}
