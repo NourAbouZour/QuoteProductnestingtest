@@ -761,29 +761,38 @@ class ProfessionalNestingEngine:
         }
     
     def _find_best_position(self, width: float, height: float, board: Board, used_positions: List[Dict]) -> Tuple[Optional[float], Optional[float]]:
-        """Find the best position for a part using bottom-left fill"""
-        # Try positions from bottom-left
-        step_size = max(10, min(width, height) / 10)
+        """Find the best position for a part using bottom-left fill with enhanced precision"""
+        # Fast position search with optimized step size
+        step_size = max(5, min(width, height) // 8)  # Balanced for speed
+        best_x, best_y = None, None
+        min_y = float('inf')
         
-        for y in range(int(self.margin_mm), int(board.height - height - self.margin_mm), int(step_size)):
-            for x in range(int(self.margin_mm), int(board.width - width - self.margin_mm), int(step_size)):
+        # Single search loop - optimized for speed
+        for y in range(int(self.margin_mm), int(board.height - height - self.margin_mm) + 1, max(1, int(step_size))):
+            for x in range(int(self.margin_mm), int(board.width - width - self.margin_mm) + 1, max(1, int(step_size))):
                 if self._can_place_part(x, y, width, height, board, used_positions):
-                    return float(x), float(y)
+                    # Prefer bottom-left positions
+                    if y < min_y or (y == min_y and (best_x is None or x < best_x)):
+                        best_x, best_y = float(x), float(y)
+                        min_y = y
         
-        return None, None
+        return best_x, best_y
     
     def _can_place_part(self, x: float, y: float, width: float, height: float, board: Board, used_positions: List[Dict]) -> bool:
-        """Check if a part can be placed at the given position"""
-        # Check board boundaries
-        if x < self.margin_mm or y < self.margin_mm:
-            return False
-        if x + width > board.width - self.margin_mm or y + height > board.height - self.margin_mm:
+        """Check if a part can be placed at the given position with proper gap consideration"""
+        # Check board boundaries with strict limits
+        if (x < self.margin_mm or y < self.margin_mm or 
+            x + width > board.width - self.margin_mm or 
+            y + height > board.height - self.margin_mm):
             return False
         
-        # Check collision with other parts
+        # Check collision with other parts - using gap for accurate spacing
+        gap = max(self.min_gap_mm, 1.0)  # Minimum gap between parts
         for pos in used_positions:
-            if not (x + width <= pos['x'] or x >= pos['x'] + pos['width'] or 
-                   y + height <= pos['y'] or y >= pos['y'] + pos['height']):
+            if not (x + width <= pos['x'] - gap or 
+                    x >= pos['x'] + pos['width'] + gap or 
+                    y + height <= pos['y'] - gap or 
+                    y >= pos['y'] + pos['height'] + gap):
                 return False
         
         return True

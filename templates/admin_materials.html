@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Materials Management</title>
+    <link rel="icon" href="/assets/logotitle.png" type="image/x-icon" style="width: 10px; height: 50px;">
     <style>
         * {
             margin: 0;
@@ -496,11 +497,6 @@
                 
                 <div class="config-grid">
                     <div class="config-group">
-                        <label for="laserCost">Laser Cost ($/minute):</label>
-                        <input type="number" id="laserCost" name="laser_cost" value="2.00" step="0.01" min="0" required>
-                    </div>
-                    
-                    <div class="config-group">
                         <label>Piercing Time Adjustment:</label>
                         <div class="toggle-group">
                             <label class="toggle-switch">
@@ -629,7 +625,6 @@
             fetch('/api/admin/config')
                 .then(response => response.json())
                 .then(data => {
-                    document.getElementById('laserCost').value = data.laser_cost || 1.50;
                     document.getElementById('piercingToggle').checked = data.piercing_toggle || false;
                     updatePiercingLabel();
                 })
@@ -655,11 +650,9 @@
         }
 
         function saveConfiguration() {
-            const laserCost = parseFloat(document.getElementById('laserCost').value);
             const piercingToggle = document.getElementById('piercingToggle').checked;
             
             const configData = {
-                laser_cost: laserCost,
                 piercing_toggle: piercingToggle
             };
 

@@ -361,30 +361,34 @@ class RobustNestingEngine:
         occupied_rectangles = []
         
         def can_place_part(x, y, width, height):
-            """Check if part can be placed without overlapping"""
-            # Check boundaries
-            if (x + width > board.width - self.margin_mm or 
-                y + height > board.height - self.margin_mm or
-                x < self.margin_mm or y < self.margin_mm):
+            """Check if part can be placed without overlapping, with accurate gap handling"""
+            # Check boundaries with strict limits
+            if (x < self.margin_mm or y < self.margin_mm or
+                x + width > board.width - self.margin_mm or 
+                y + height > board.height - self.margin_mm):
                 return False
             
-            # Check overlaps
+            # Check overlaps with proper gap distance
+            gap_size = max(self.min_gap_mm, 0.5)  # Ensure minimum gap
             for rect in occupied_rectangles:
-                if not (x + width <= rect['x'] or x >= rect['x'] + rect['width'] or 
-                       y + height <= rect['y'] or y >= rect['y'] + rect['height']):
+                if not (x + width <= rect['x'] - gap_size or 
+                        x >= rect['x'] + rect['width'] + gap_size or 
+                        y + height <= rect['y'] - gap_size or 
+                        y >= rect['y'] + rect['height'] + gap_size):
                     return False
             return True
         
         def find_best_position(width, height):
-            """Find best position using bottom-left-fill"""
+            """Find best position using fast bottom-left-fill"""
             best_x, best_y = None, None
             min_y = float('inf')
             
-            # Use efficient step size
-            step_size = max(10, min(width, height) // 4)
+            # Fast step size for performance
+            step_size = max(8, min(width, height) // 6)  # Balanced for speed
             
-            for y in range(int(self.margin_mm), int(board.height - height - self.margin_mm) + 1, int(step_size)):
-                for x in range(int(self.margin_mm), int(board.width - width - self.margin_mm) + 1, int(step_size)):
+            # Single search loop for performance
+            for y in range(int(self.margin_mm), int(board.height - height - self.margin_mm) + 1, max(1, int(step_size))):
+                for x in range(int(self.margin_mm), int(board.width - width - self.margin_mm) + 1, max(1, int(step_size))):
                     if can_place_part(x, y, width, height):
                         if y < min_y or (y == min_y and (best_x is None or x < best_x)):
                             best_x, best_y = x, y

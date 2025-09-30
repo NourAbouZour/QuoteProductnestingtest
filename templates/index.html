@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NAGGIAR SINCE 1860- DXF Processing System</title>
+    <title>NAGGIAR Quotation </title>
+    <link rel="icon" href="/assets/logotitle.png" type="image/x-icon" style="width: 10px; height: 50px;">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&family=Exo+2:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         * {
@@ -658,9 +659,9 @@
         .material-popup-content {
             background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
             border-radius: 25px;
-            max-width: 900px;
+            /* max-width: 900px; */
             width: 100%;
-            max-height: 85vh;
+            max-height: 160vh;
             overflow-y: auto;
             box-shadow: 
                 0 25px 50px rgba(0, 0, 0, 0.5),
@@ -811,9 +812,10 @@
 
         .material-popup-part-fields {
             display: grid;
-            grid-template-columns: 160px 1fr 1fr 1fr; /* image + 3 columns of fields */
-            gap: 15px;
+            grid-template-columns: 180px 1fr 1fr 1fr; /* image + 3 columns of fields */
+            gap: 20px;
             align-items: start;
+            padding: 10px;
         }
         .material-popup-error {
             grid-column: 1 / -1;
@@ -827,58 +829,58 @@
         }
         .material-popup-part-image {
             grid-row: 1 / span 2;
-            width: 160px;
-            height: 160px;
-            border: 2px solid #ff8c00;
-            border-radius: 12px;
+            width: 180px;
+            height: 180px;
+            border: 3px solid #ff8c00;
+            border-radius: 15px;
             background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
             display: flex;
             align-items: center;
             justify-content: center;
             overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
             position: relative;
+            margin: 0 auto;
         }
         
-        .material-popup-part-image::before {
-            content: '📐';
-            font-size: 2em;
-            color: #ff8c00;
-            opacity: 0.3;
-        }
+       
         
         .material-popup-part-image img {
             max-width: 100%;
-            max-height: 100%;
             object-fit: contain;
-            border-radius: 10px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
 
         .material-popup-field {
             display: flex;
             flex-direction: column;
+            min-height: 80px;
+            justify-content: flex-start;
         }
 
         .material-popup-field label {
             font-weight: 700;
             color: #1a1a1a;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             font-size: 1em;
             font-family: 'Orbitron', monospace;
             text-transform: uppercase;
             letter-spacing: 1px;
+            text-align: left;
         }
 
         .material-popup-field select {
-            padding: 12px 16px;
+            padding: 14px 18px;
             border: 2px solid #e1e5e9;
-            border-radius: 10px;
+            border-radius: 12px;
             font-size: 14px;
             background: white;
             transition: all 0.3s ease;
             width: 100%;
             font-weight: 500;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+            min-height: 50px;
         }
 
         .material-popup-field select:focus {
@@ -891,6 +893,39 @@
         .material-popup-field select:hover {
             border-color: #ff8c00;
             box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Responsive grid layout for material fields */
+        @media (max-width: 768px) {
+            .material-popup-part-fields {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            .material-popup-part-image {
+                grid-row: 1;
+                width: 100%;
+                max-width: 200px;
+                margin: 0 auto;
+            }
+        }
+
+        /* Ensure proper alignment of all fields */
+        .material-popup-field:nth-child(2) {
+            grid-column: 2;
+        }
+        
+        .material-popup-field:nth-child(3) {
+            grid-column: 3;
+        }
+        
+        .material-popup-field:nth-child(4) {
+            grid-column: 4;
+        }
+        
+        .material-popup-field:nth-child(5) {
+            grid-column: 2;
+            grid-row: 2;
         }
 
         .material-popup-actions {
@@ -1477,6 +1512,139 @@
 
         .required {
             color: #dc3545;
+        }
+
+        /* Customer Search Section Styles */
+        .customer-search-section {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 2px solid #dee2e6;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .search-header h3 {
+            color: #333;
+            margin: 0 0 8px 0;
+            font-size: 1.2em;
+            text-align: center;
+        }
+
+        .search-header p {
+            color: #6c757d;
+            margin: 0 0 15px 0;
+            font-size: 0.9em;
+            text-align: center;
+        }
+
+        .search-container {
+            position: relative;
+        }
+
+        .search-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .search-input-group input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .search-input-group input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+        }
+
+        .search-btn {
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #FF802A 0%, #FF802A 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .search-btn:hover {
+            background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,123,255,0.3);
+        }
+
+        .search-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .search-results {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .search-result-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+
+        .search-result-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .search-result-item:active {
+            background-color: #e9ecef;
+        }
+
+        .search-result-company {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .search-result-details {
+            font-size: 0.85em;
+            color: #6c757d;
+            line-height: 1.4;
+        }
+
+        .search-result-details span {
+            display: inline-block;
+            margin-right: 15px;
+        }
+
+        .search-loading {
+            text-align: center;
+            padding: 20px;
+            color: #6c757d;
+            font-style: italic;
+        }
+
+        .search-no-results {
+            text-align: center;
+            padding: 20px;
+            color: #6c757d;
+            font-style: italic;
         }
 
         .cost-breakdown-value {
@@ -2147,6 +2315,24 @@
                 <h2>📄 PDF Quote Details</h2>
                 <p>Please enter the quotation details below</p>
             </div>
+            
+            <!-- Customer Search Section -->
+            <div class="customer-search-section">
+                <div class="search-header">
+                    <h3>🔍 Search Customer Database</h3>
+                    <p>Search for existing customers to auto-fill form fields</p>
+                </div>
+                <div class="search-container">
+                    <div class="search-input-group">
+                        <input type="text" id="customerSearchInput" placeholder="Enter company name (e.g., 'mitsu')" autocomplete="off">
+                        <button type="button" id="searchCustomersBtn" class="search-btn">Search</button>
+                    </div>
+                    <div id="searchResults" class="search-results" style="display: none;">
+                        <!-- Search results will be populated here -->
+                    </div>
+                </div>
+            </div>
+            
             <form id="pdfForm">
                 <div class="form-group">
                     <label for="quotationNumber">Quotation Number <span class="required">*</span></label>
@@ -2169,16 +2355,16 @@
                     <input type="text" id="vatId" name="vatId" placeholder="Optional">
                 </div>
                 <div class="form-group">
-                    <label for="contactName">Contact Name <span class="required">*</span></label>
-                    <input type="text" id="contactName" name="contactName" required>
+                    <label for="contactName">Contact Name</label>
+                    <input type="text" id="contactName" name="contactName" placeholder="Optional">
                 </div>
                 <div class="form-group">
                     <label for="telephone">Telephone <span class="required">*</span></label>
                     <input type="tel" id="telephone" name="telephone" required>
                 </div>
                 <div class="form-group">
-                    <label for="email">Email <span class="required">*</span></label>
-                    <input type="email" id="email" name="email" required>
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" placeholder="Optional">
                 </div>
                 <div class="form-group">
                     <label for="address">Address <span class="required">*</span></label>
@@ -2336,7 +2522,7 @@
                 <h3>🔧 Material Selection</h3>
                 <div class="selection-grid">
                     <div class="selection-group">
-                        <label for="materialTypeSelect">Material Type:</label>
+                        <label for="materialTypeSelect">Material:</label>
                         <select id="materialTypeSelect" name="material_type" class="selection-input">
                             <option value="">Loading...</option>
                         </select>
@@ -2441,9 +2627,9 @@
                     </div> -->
                     <div class="scrap-actions">
                         
-                        <!-- <button type="button" class="scrap-btn" id="nestMetricsBtn">
+                        <button type="button" class="scrap-btn" id="nestMetricsBtn">
                             🏭 OPTIMIZE NESTING
-                        </button> -->
+                        </button>
                     </div>
                 </div>
                 
@@ -2619,6 +2805,19 @@
 
             <div class="error-message" id="errorMessage"></div>
             <div class="success-message" id="successMessage"></div>
+            
+            <!-- Laser Cost Configuration -->
+            <div class="laser-cost-section" style="margin-bottom: 20px; padding: 20px; background: #f8f9fa; border-radius: 10px; border: 1px solid #e9ecef;">
+                <h3 style="margin-bottom: 15px; color: #333; font-size: 1.1em;">⚙️ Laser Cost Configuration</h3>
+                <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                    <label for="userLaserCost" style="font-weight: 600; color: #555; min-width: 150px;">Laser Cost ($/minute):</label>
+                    <input type="number" id="userLaserCost" name="user_laser_cost" value="1.50" step="0.01" min="0" 
+                           style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; width: 120px;"
+                           placeholder="Enter laser cost">
+                    <span style="color: #666; font-size: 0.9em;">Cost per minute of laser cutting time</span>
+                </div>
+            </div>
+            
             <button type="button" class="scrap-btn" id="calcQuoteBtn" onclick="calculateQuote()">
                 ⚡ CALCULATE QUOTE
             </button>
@@ -4375,25 +4574,25 @@
                     <div class="material-popup-part-fields">
                         <div class="material-popup-part-image" id="popup_img_${part.partNumber}">Loading…</div>
                         <div class="material-popup-field">
-                            
+                            <label for="popup_material_${part.partNumber}">MATERIAL TYPE:</label>
                             <select id="popup_material_${part.partNumber}" class="popup-material-select" data-part="${part.partNumber}" data-field="material">
-                                <option value="">Select Material Type (Optional)</option>
+                                <option value="">Select Material Type</option>
                             </select>
                         </div>
                         <div class="material-popup-field">
-                            <label for="popup_thickness_${part.partNumber}">Thickness:</label>
+                            <label for="popup_thickness_${part.partNumber}">THICKNESS:</label>
                             <select id="popup_thickness_${part.partNumber}" class="popup-thickness-select" data-part="${part.partNumber}" data-field="thickness">
                                 <option value="">Select Material Type First</option>
                             </select>
                         </div>
                         <div class="material-popup-field">
-                            <label for="popup_grade_${part.partNumber}">Grade:</label>
+                            <label for="popup_grade_${part.partNumber}">GRADE:</label>
                             <select id="popup_grade_${part.partNumber}" class="popup-grade-select" data-part="${part.partNumber}" data-field="grade">
                                 <option value="">Select Material Type First</option>
                             </select>
                         </div>
                         <div class="material-popup-field">
-                            <label for="popup_finish_${part.partNumber}">Finish:</label>
+                            <label for="popup_finish_${part.partNumber}">FINISH:</label>
                             <select id="popup_finish_${part.partNumber}" class="popup-finish-select" data-part="${part.partNumber}" data-field="finish">
                                 <option value="">Select Material Type First</option>
                             </select>
@@ -5273,11 +5472,126 @@
             }
         }
 
+        // Customer Search functionality
+        async function searchCustomers() {
+            const searchInput = document.getElementById('customerSearchInput');
+            const searchBtn = document.getElementById('searchCustomersBtn');
+            const searchResults = document.getElementById('searchResults');
+            
+            const companyName = searchInput.value.trim();
+            
+            if (companyName.length < 2) {
+                showError('Please enter at least 2 characters to search');
+                return;
+            }
+            
+            // Show loading state
+            searchBtn.disabled = true;
+            searchBtn.textContent = 'Searching...';
+            searchResults.style.display = 'block';
+            searchResults.innerHTML = '<div class="search-loading">Searching customers...</div>';
+            
+            try {
+                const response = await fetch('/api/search-customers', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        company_name: companyName
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to search customers');
+                }
+                
+                if (data.customers && data.customers.length > 0) {
+                    displaySearchResults(data.customers);
+                } else {
+                    searchResults.innerHTML = '<div class="search-no-results">No customers found matching your search.</div>';
+                }
+                
+            } catch (error) {
+                console.error('Error searching customers:', error);
+                searchResults.innerHTML = `<div class="search-no-results">Error: ${error.message}</div>`;
+            } finally {
+                searchBtn.disabled = false;
+                searchBtn.textContent = 'Search';
+            }
+        }
+        
+        function displaySearchResults(customers) {
+            const searchResults = document.getElementById('searchResults');
+            
+            let html = '';
+            customers.forEach((customer, index) => {
+                html += `
+                    <div class="search-result-item" onclick="selectCustomer(${index})" data-customer='${JSON.stringify(customer)}'>
+                        <div class="search-result-company">${customer.file_name || 'N/A'}</div>
+                        <div class="search-result-details">
+                            <span><strong>File #:</strong> ${customer.file_number || 'N/A'}</span>
+                            <span><strong>Contact:</strong> ${customer.first_name || 'N/A'}</span>
+                            <span><strong>Phone:</strong> ${customer.telephone || 'N/A'}</span>
+                            <span><strong>VAT:</strong> ${customer.vat_id || 'N/A'}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            searchResults.innerHTML = html;
+        }
+        
+        function selectCustomer(index) {
+            const customerItem = document.querySelector(`[data-customer]`).parentElement.children[index];
+            const customerData = JSON.parse(customerItem.getAttribute('data-customer'));
+            
+            // Auto-fill form fields
+            document.getElementById('companyName').value = customerData.file_name || '';
+            document.getElementById('pscNumber').value = customerData.file_number || '';
+            document.getElementById('vatId').value = customerData.vat_id || '';
+            document.getElementById('contactName').value = customerData.first_name || '';
+            document.getElementById('telephone').value = customerData.telephone || '';
+            document.getElementById('email').value = customerData.email || '';
+            document.getElementById('address').value = customerData.address || '';
+            
+            // Hide search results
+            document.getElementById('searchResults').style.display = 'none';
+            
+            // Clear search input
+            document.getElementById('customerSearchInput').value = '';
+            
+            showSuccess('Customer information loaded successfully!');
+        }
+        
+        // Store customer data globally for access
+        window.customerData = [];
+
         // Handle form submission
         document.addEventListener('DOMContentLoaded', function() {
             // Set current date automatically
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('quotationDate').value = today;
+            
+            // Add search functionality event listeners
+            const searchBtn = document.getElementById('searchCustomersBtn');
+            const searchInput = document.getElementById('customerSearchInput');
+            
+            if (searchBtn) {
+                searchBtn.addEventListener('click', searchCustomers);
+            }
+            
+            if (searchInput) {
+                // Search on Enter key press
+                searchInput.addEventListener('keypress', function(event) {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        searchCustomers();
+                    }
+                });
+            }
             
             document.getElementById('pdfForm').addEventListener('submit', async function(event) {
                 event.preventDefault();
@@ -5623,13 +5937,20 @@
                     currentDataKeys: window.currentData ? Object.keys(window.currentData) : 'no currentData'
                 });
 
+                // Create AbortController for timeout handling
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+                
                 const response = await fetch('/api/nesting/calculate', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(requestData)
+                    body: JSON.stringify(requestData),
+                    signal: controller.signal
                 });
+                
+                clearTimeout(timeoutId);
 
                 if (!response.ok) {
                     const errorText = await response.text();
@@ -5665,7 +5986,17 @@
 
             } catch (err) {
                 console.error('[NESTING] Error:', err);
-                showError(`Failed to calculate nesting: ${err.message || err}`);
+                
+                // Handle specific error types
+                if (err.name === 'AbortError') {
+                    showError('Nesting calculation timed out. Please try with fewer parts or contact support.');
+                } else if (err.message && err.message.includes('timeout')) {
+                    showError('Nesting calculation timed out. Please try with fewer parts or contact support.');
+                } else if (err.message && err.message.includes('Failed to fetch')) {
+                    showError('Connection failed. Please check your internet connection and try again.');
+                } else {
+                    showError(`Failed to calculate nesting: ${err.message || err}`);
+                }
             } finally {
                 const btn = document.getElementById('nestMetricsBtn');
                 if (btn) { 
@@ -6024,7 +6355,7 @@
 
                 .advanced-optimization-panel {
                     margin: 20px 0;
-                    background: linear-gradient(135deg, #262626 0%, #2a5298 100%);
+                    background: linear-gradient(135deg, #262626 0%, #434445 100%);
                     border-radius: 16px;
                     border: 1px solid #ff8c00;
                     box-shadow: 0 8px 32px rgba(0,0,0,0.15);
@@ -6140,7 +6471,7 @@
                 }
 
                 .start-btn {
-                    background: linear-gradient(135deg, #FF6B00 0%, #20c997 100%);
+                    background: linear-gradient(135deg, #FF6B00 0%, #ff8c00 100%);
                     color: white;
                     box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
                 }
@@ -6785,6 +7116,11 @@
                 
                 const scrapFactor = document.getElementById('scrapFactor')?.value || '1.20';
                 formData.append('scrap_factor', scrapFactor);
+                
+                // Get laser cost from user input
+                const userLaserCost = document.getElementById('userLaserCost')?.value || '1.50';
+                formData.append('laser_cost', userLaserCost);
+                
                 if (jobId) formData.append('job_id', jobId);
 
                 const resp = await fetch('/upload', { method: 'POST', body: formData });

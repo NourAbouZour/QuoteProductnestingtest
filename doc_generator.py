@@ -939,8 +939,8 @@ HTML_TEMPLATE = r"""<!doctype html>
   <div class="quotation-date">Date: {{ format_date_dd_mm_yyyy(pdf.quotationDate) or "–" }}</div>
 </header>
 <div class="quotation-info">
-<h1>Quotation Number: {{ pdf.quotationNumber or "–" }}</h1>
-    <h3>Budget Price +/-5%</h3>
+<h1 >Budget Price (+/- 10%) for {{ pdf.quotationNumber or "–" }}</h1>
+   <h3 style="font-weight: normal;">For 100% accurate quotation, we need approximately 24 hours.</h3>
   </div>
   <hr>
 <!-- Opening Statement -->
@@ -1063,30 +1063,55 @@ HTML_TEMPLATE = r"""<!doctype html>
 <section class="totals-section">
   <div class="totals-list">
 
-    {# -------- Laser price -------- #}
-    {% set laser_price = costs.get('total_cost') or costs.get('laser_cost') or 0 %}
+    {# -------- Calculate individual totals from parts (unit price × quantity) -------- #}
+    {% set ns = namespace(laser_total=0, material_total=0, bending_total=0, ext_total=0) %}
+    
+    {# Calculate totals from parts data - multiply unit price by quantity for each row #}
+    {% for p in parts %}
+      {% if p.cost_data %}
+        {% set quantity = p.object_parts_count or (p.cost_data.object_parts_count or 1) %}
+        {% set laser_unit_price = p.cost_data.laser_cost or 0 %}
+        {% set material_unit_price = p.cost_data.material_cost or 0 %}
+        {% set bending_unit_price = p.cost_data.bending_cost or 0 %}
+        
+        {% set ns.laser_total = ns.laser_total + (laser_unit_price * quantity) %}
+        {% set ns.material_total = ns.material_total + (material_unit_price * quantity) %}
+        {% set ns.bending_total = ns.bending_total + (bending_unit_price * quantity) %}
+      {% endif %}
+    {% endfor %}
+    {# -------- Material Price -------- #}
+<div class="total-item">
+      <span class="total-label">Material Price:</span>
+      <span class="total-value">{{ format_currency(ns.material_total) }}</span>
+    </div>
+    {# -------- Laser Price (only laser cutting costs) -------- #}
     <div class="total-item">
       <span class="total-label">Laser Price:</span>
-      <span class="total-value">{{ format_currency(laser_price) }}</span>
+      <span class="total-value">{{ format_currency(ns.laser_total) }}</span>
+    </div>
+
+    
+    
+
+    {# -------- Bending Price -------- #}
+    <div class="total-item">
+      <span class="total-label">Bending Price:</span>
+      <span class="total-value">{{ format_currency(ns.bending_total) }}</span>
     </div>
 
     {# ----------- External services (Add …) ------------ #}
-    {# In Jinja2 a plain variable set inside a loop is lost outside that loop,
-       so we use a “namespace” object that survives the scope. #}
-    {% set ns = namespace(ext_total=0) %}
-
     {% for name, line in ext_lines %}
       {% if line.enabled and line.total and line.total > 0 %}
         {% set ns.ext_total = ns.ext_total + line.total %}
         <div class="total-item">
-          <span class="total-label">Add {{ name.replace('_', ' ').title() }}:</span>
+          <span class="total-label"> {{ name.replace('_', ' ').title() }}:</span>
           <span class="total-value">{{ format_currency(line.total) }}</span>
         </div>
       {% endif %}
     {% endfor %}
 
     {# -------- Sub-total, VAT, Grand total -------- #}
-    {% set subtotal     = laser_price + ns.ext_total %}
+    {% set subtotal     = ns.laser_total + ns.material_total + ns.bending_total + ns.ext_total %}
     {% set vat_amount   = subtotal * 0.11 %}
     {% set final_total  = subtotal + vat_amount %}
 
@@ -1196,7 +1221,16 @@ body {
   right: 0;
   font-weight: bold;
 }
-
+.quotation-info{
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin-bottom: 8px;
+  position: relative;
+}
 .logo-container {
   text-align: right;
 }

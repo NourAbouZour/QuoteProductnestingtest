@@ -55,4 +55,8 @@ playwright>=1.40.0
 
 # Note: For PostgreSQL support, install Microsoft Visual C++ Build Tools first:
 # https://visualstudio.microsoft.com/visual-cpp-build-tools/
-# Then run: pip install psycopg2-binary 
+# Then run: pip install psycopg2-binary
+
+# SQL Server Dependencies
+pyodbc>=4.0.0
+python-dotenv>=1.0.0 

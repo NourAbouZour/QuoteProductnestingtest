@@ -56,9 +56,9 @@ class MultiBoardNestingOptimizer:
         self.min_gap_mm = min_gap_mm
         self.margin_mm = margin_mm
         self.rotation_angles = [0, 90, 180, 270]  # Standard rotations
-        # Full 360-degree rotation optimization (every 5 degrees for fine tuning)
-        self.full_rotation_angles = list(range(0, 360, 5))  # 0, 5, 10, 15, ..., 355 degrees
-        self.advanced_rotations = [0, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165, 180, 195, 210, 225, 240, 255, 270, 285, 300, 315, 330, 345]
+        # Optimized rotation angles for performance
+        self.full_rotation_angles = [0, 90, 180, 270]  # Standard 90-degree steps
+        self.advanced_rotations = [0, 90, 180, 270]  # Same fast rotations
     
     def optimize_multi_board_nesting(self, parts: List[Part], boards: List[Board], 
                                    max_boards: int = 10, use_advanced_rotations: bool = True) -> Dict:
@@ -149,6 +149,7 @@ class MultiBoardNestingOptimizer:
         best_result = None
         best_fitness = 0
         
+        # Try rotation angles quickly - optimized for performance
         for rotation_angle in rotation_angles:
             result = self._nest_parts_on_board(all_instances, board, rotation_angle)
             if result:
@@ -156,6 +157,9 @@ class MultiBoardNestingOptimizer:
                 if fitness > best_fitness:
                     best_fitness = fitness
                     best_result = result
+                    # Early termination if we find perfect fit
+                    if len(result['fitted_parts']) == len(all_instances):
+                        break
         
         if best_result and best_result['total_parts_fitted'] == len(all_instances):
             return {
@@ -381,14 +385,20 @@ class MultiBoardNestingOptimizer:
         
         def can_place_part(x, y, width, height):
             """Check if a part can be placed at (x, y) without overlapping existing parts"""
-            # Check board boundaries
-            if x + width > board.width - self.margin_mm or y + height > board.height - self.margin_mm:
+            # Check board boundaries with stricter limits
+            if (x < self.margin_mm or y < self.margin_mm or 
+                x + width > board.width - self.margin_mm or 
+                y + height > board.height - self.margin_mm):
                 return False
             
-            # Check for overlaps with existing parts
+            # Check for overlaps with existing parts - using proper gaps
+            gap_size = self.min_gap_mm
             for rect in occupied_rectangles:
-                if not (x + width <= rect['x'] or x >= rect['x'] + rect['width'] or 
-                       y + height <= rect['y'] or y >= rect['y'] + rect['height']):
+                # Check if there's sufficient gap between rectangles
+                if not (x + width <= rect['x'] - gap_size or 
+                        x >= rect['x'] + rect['width'] + gap_size or 
+                        y + height <= rect['y'] - gap_size or 
+                        y >= rect['y'] + rect['height'] + gap_size):
                     return False
             return True
         
@@ -397,10 +407,10 @@ class MultiBoardNestingOptimizer:
             best_x, best_y = None, None
             min_y = float('inf')
             
-            # Use larger step size for efficiency (20mm steps instead of 5mm)
-            step_size = max(20, min(width, height) // 2)
+            # Use adaptive step size - balanced for speed and accuracy
+            step_size = max(10, min(width, height) // 4)
             
-            # Try placing at strategic positions
+            # Single efficient search loop
             for y in range(int(self.margin_mm), int(board.height - height - self.margin_mm) + 1, int(step_size)):
                 for x in range(int(self.margin_mm), int(board.width - width - self.margin_mm) + 1, int(step_size)):
                     if can_place_part(x, y, width, height):
@@ -408,17 +418,6 @@ class MultiBoardNestingOptimizer:
                         if y < min_y or (y == min_y and (best_x is None or x < best_x)):
                             best_x, best_y = x, y
                             min_y = y
-                            # If we found a good position, try to optimize it with smaller steps
-                            for dy in range(-int(step_size//2), int(step_size//2) + 1, 5):
-                                for dx in range(-int(step_size//2), int(step_size//2) + 1, 5):
-                                    new_x, new_y = x + dx, y + dy
-                                    if (new_x >= self.margin_mm and new_y >= self.margin_mm and
-                                        new_x + width <= board.width - self.margin_mm and
-                                        new_y + height <= board.height - self.margin_mm and
-                                        can_place_part(new_x, new_y, width, height)):
-                                        if new_y < min_y or (new_y == min_y and new_x < best_x):
-                                            best_x, best_y = new_x, new_y
-                                            min_y = new_y
             
             return best_x, best_y
         

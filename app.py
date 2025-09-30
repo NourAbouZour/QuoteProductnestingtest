@@ -7,6 +7,22 @@ import base64
 from datetime import datetime
 from collections import defaultdict
 
+# Load environment variables from sql_server_config.env
+try:
+    from dotenv import load_dotenv
+    load_dotenv('sql_server_config.env')
+except ImportError:
+    # If python-dotenv is not available, manually load the env file
+    try:
+        with open('sql_server_config.env', 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key] = value
+    except FileNotFoundError:
+        pass
+
 import ezdxf
 import numpy as np
 import matplotlib
@@ -3620,6 +3636,44 @@ def test_db_connection():
     except Exception as e:
         return jsonify({'error': str(e), 'connection': 'FAILED'}), 500
 
+@app.route('/api/search-customers', methods=['POST'])
+def api_search_customers():
+    """Search customers in SQL Server database"""
+    try:
+        from sql_server_config import search_customers
+        
+        data = request.get_json()
+        company_name = data.get('company_name', '').strip()
+        
+        if not company_name:
+            return jsonify({'error': 'Company name is required'}), 400
+        
+        if len(company_name) < 2:
+            return jsonify({'error': 'Company name must be at least 2 characters'}), 400
+        
+        # Search customers using the SQL Server function
+        customers = search_customers(company_name)
+        
+        # Check if we got an empty result due to database access issues
+        if len(customers) == 0:
+            # This might be due to database access issues
+            return jsonify({
+                'success': True,
+                'customers': [],
+                'count': 0,
+                'message': 'No customers found. This might be due to database access restrictions. Please contact your administrator.'
+            })
+        
+        return jsonify({
+            'success': True,
+            'customers': customers,
+            'count': len(customers)
+        })
+        
+    except Exception as e:
+        print(f"Error in search customers: {e}")
+        return jsonify({'error': f'Search failed: {str(e)}'}), 500
+
 @app.route('/api/extract-labels', methods=['POST'])
 def api_extract_labels_only():
     """Return only the per-part labels from a DXF upload as JSON.
@@ -4873,13 +4927,16 @@ def upload_file():
             except Exception:
                 material_config = None
             
-            # Get admin configuration for laser cost and piercing toggle
+            # Get admin configuration for piercing toggle and other settings
             admin_config = load_admin_config()
+            
+            # Get laser cost from user input (priority over admin config)
+            user_laser_cost = float(request.form.get('laser_cost', admin_config.get('laser_cost', 1.50)))
             
             # Merge material config with admin config (guard None)
             if material_config:
                 config = material_config.copy()
-                config['laser_cost'] = admin_config.get('laser_cost', 2)
+                config['laser_cost'] = user_laser_cost  # Use user input instead of admin config
                 config['piercing_toggle'] = admin_config.get('piercing_toggle', False)
                 config['scrap_factor'] = scrap_factor
             else:
@@ -4892,7 +4949,7 @@ def upload_file():
                     'density': admin_config.get('density', 7.85),
                     'vgroove_price': admin_config.get('vgroove_price', 0.0),
                     'bending_price': admin_config.get('bending_price', 0.0),
-                    'laser_cost': admin_config.get('laser_cost', 2),
+                    'laser_cost': user_laser_cost,  # Use user input instead of admin config
                     'piercing_toggle': admin_config.get('piercing_toggle', False),
                     'scrap_factor': scrap_factor
                 }
@@ -5574,6 +5631,10 @@ def upload_multi():
 
     job_id = request.form.get('job_id') or ""
     scrap_factor = float(request.form.get('scrap_factor', 1.20))
+    
+    # Get laser cost from user input
+    admin_config = load_admin_config()
+    user_laser_cost = float(request.form.get('laser_cost', admin_config.get('laser_cost', 1.50)))
 
     # Optional per-file settings as JSON array: [{name, material_name, thickness, grade, finish}]
     import json as _json
@@ -5862,7 +5923,7 @@ def upload_multi():
                         # Found in database, proceed with calculation
                         print(f"  ✓ Found DB config for part {part_number_global}. Calculating costs...")
                         admin_config = load_admin_config()
-                        db_config['laser_cost'] = admin_config.get('laser_cost', 2)
+                        db_config['laser_cost'] = user_laser_cost  # Use user input instead of admin config
                         db_config['piercing_toggle'] = admin_config.get('piercing_toggle', False)
                         db_config['scrap_factor'] = scrap_factor
                         # Apply UI overrides if present for this material key
@@ -6451,23 +6512,18 @@ def api_save_config():
         data = request.get_json()
         
         # Validate required fields
-        if 'laser_cost' not in data or 'piercing_toggle' not in data:
+        if 'piercing_toggle' not in data:
             return jsonify({'error': 'Missing required fields'}), 400
-        
-        # Validate laser cost
-        try:
-            laser_cost = float(data['laser_cost'])
-            if laser_cost < 0:
-                return jsonify({'error': 'Laser cost must be positive'}), 400
-        except ValueError:
-            return jsonify({'error': 'Invalid laser cost value'}), 400
         
         # Validate piercing toggle
         piercing_toggle = bool(data['piercing_toggle'])
         
-        # Save configuration
+        # Load existing config to preserve laser_cost if it exists
+        existing_config = load_admin_config()
+        
+        # Save configuration (only piercing_toggle, preserve existing laser_cost)
         config = {
-            'laser_cost': laser_cost,
+            'laser_cost': existing_config.get('laser_cost', 1.50),  # Keep existing or default
             'piercing_toggle': piercing_toggle
         }
         
@@ -8135,8 +8191,21 @@ def run_fallback_grid_nesting_from_quantities(parts_with_quantities, board_specs
 
 @app.route('/api/nesting/calculate', methods=['POST'])
 def calculate_nesting_with_existing_quantities():
-    """Calculate nesting using multi-board optimization to fit ALL parts with minimal scrap"""
+    """Calculate nesting using fast optimization with timeout protection"""
+    import threading
+    import time
+    
+    # Cross-platform timeout implementation
+    timeout_occurred = threading.Event()
+    
+    def timeout_handler():
+        time.sleep(60)  # 60 second timeout
+        timeout_occurred.set()
+    
     try:
+        # Start timeout thread
+        timeout_thread = threading.Thread(target=timeout_handler, daemon=True)
+        timeout_thread.start()
         data = request.get_json()
         
         # Get data that your system already provides
@@ -8153,10 +8222,11 @@ def calculate_nesting_with_existing_quantities():
         if not meaningful_parts and not part_images:
             return jsonify({'error': 'No parts data provided. Please upload a DXF file first.'}), 400
         
-        # Import multi-board optimizer
+        # Import fast nesting engine for performance
+        from fast_nesting_engine import FastNestingEngine, Part, Board
         from multi_board_nesting_optimizer import MultiBoardNestingOptimizer
         from robust_nesting_engine import RobustNestingEngine, Part as RobustPart, Board as RobustBoard
-        from professional_nesting_engine import ProfessionalNestingEngine, Part, Board
+        from professional_nesting_engine import ProfessionalNestingEngine, Part as ProfPart, Board as ProfBoard
         
         # Extract quantities and create parts for multi-board optimizer
         parts = []
@@ -8310,18 +8380,26 @@ def calculate_nesting_with_existing_quantities():
         # Use professional nesting engine for accurate results
         print(f"[NESTING_API] Using professional nesting engine with {len(parts)} parts")
 
-        # Convert to professional engine format
+        # Convert to professional engine format with improved ordering
         prof_parts = []
         for part in parts:
-            prof_parts.append(Part(
-                id=part.id,
-                width=part.width,
-                height=part.height,
-                quantity=part.quantity,
-                rotation_allowed=part.rotation_allowed,
-                area=part.area,
-                svg_path=getattr(part, 'svg_path', '')
-            ))
+            # Validate part data before adding
+            if (part.width > 0 and part.height > 0 and part.quantity > 0):
+                prof_parts.append(Part(
+                    id=part.id,
+                    width=part.width,
+                    height=part.height,
+                    quantity=part.quantity,
+                    rotation_allowed=part.rotation_allowed,
+                    area=part.area,
+                    svg_path=getattr(part, 'svg_path', '')
+                ))
+            else:
+                print(f"[NESTING_API] Skipping invalid part {part.id}: w={part.width}, h={part.height}, qty={part.quantity}")
+        
+        # Sort parts by area (largest first) for better packing efficiency
+        prof_parts.sort(key=lambda p: p.area, reverse=True)
+        print(f"[NESTING_API] Processing {len(prof_parts)} valid parts (sorted by area)")
 
         prof_boards = []
         for board in boards:
@@ -8334,23 +8412,65 @@ def calculate_nesting_with_existing_quantities():
                 area=board.area
             ))
 
-        # Use professional nesting engine with more boards for large datasets
-        # For large datasets (666+ parts), use more boards to ensure all parts fit
-        effective_max_boards = max_boards
+        # Use fast nesting engine for performance and timeout protection
         total_parts = sum(part.quantity for part in prof_parts)
-        if total_parts > 500:
-            effective_max_boards = min(max_boards * 2, len(prof_boards))  # Use up to 2x more boards
-            print(f"[NESTING_API] Large dataset detected ({total_parts} parts), using up to {effective_max_boards} boards")
+        print(f"[NESTING_API] Using fast nesting engine for {total_parts} parts")
         
-        engine = ProfessionalNestingEngine(
-            margin_mm=nesting_config.get('sheet_margin_mm', {'top': 10, 'right': 10, 'bottom': 10, 'left': 10}).get('top', 10),
-            min_gap_mm=nesting_config.get('min_part_gap_mm', 5.0)
+        # Initialize fast engine with timeout protection
+        margin_config = nesting_config.get('sheet_margin_mm', {'top': 10, 'right': 10, 'bottom': 10, 'left': 10})
+        if isinstance(margin_config, dict):
+            main_margin = margin_config.get('top', 10)
+        else:
+            main_margin = float(margin_config)
+        
+        # Set timeout based on dataset size
+        timeout_seconds = 15 if total_parts <= 100 else 30 if total_parts <= 500 else 45
+        
+        engine = FastNestingEngine(
+            margin_mm=main_margin,
+            min_gap_mm=nesting_config.get('min_part_gap_mm', 5.0),
+            timeout_seconds=timeout_seconds
         )
-        result = engine.optimize_nesting(prof_parts, prof_boards, effective_max_boards)
         
-        print(f"[NESTING_API] Robust engine result: success={result.get('success', False)}, "
-              f"utilization={result.get('total_utilization', 0):.1%}, "
-              f"boards={result.get('total_boards_used', 0)}")
+        # Enable debug for smaller datasets
+        engine.debug = (total_parts < 50)
+        
+        # Check for timeout before starting
+        if timeout_occurred.is_set():
+            raise TimeoutError("Request timeout before processing")
+        
+        # Perform fast nesting optimization with timeout protection
+        result = engine.optimize_nesting(prof_parts, prof_boards, max_boards)
+        
+        # Check for timeout after processing
+        if timeout_occurred.is_set():
+            raise TimeoutError("Nesting calculation timeout")
+        
+        # Check for timeout or failure
+        if not result or not result.get('success', False):
+            if result and 'timeout' in str(result.get('error', '')).lower():
+                print(f"[NESTING_API] Timeout detected, using fallback")
+                # Try simple grid placement as fallback
+                from fast_nesting_engine import FastNestingEngine
+                fallback_engine = FastNestingEngine(
+                    margin_mm=main_margin,
+                    min_gap_mm=nesting_config.get('min_part_gap_mm', 5.0),
+                    timeout_seconds=10  # Short timeout for fallback
+                )
+                result = fallback_engine._try_simple_grid_fallback(prof_parts, prof_boards, max_boards)
+            else:
+                print(f"[NESTING_API] Nesting failed: {result.get('error', 'Unknown error')}")
+        
+        # Log results
+        if result and result.get('success', False):
+            parts_fitted = result.get('parts_summary', {}).get('fitted_instances', 0)
+            parts_required = result.get('parts_summary', {}).get('total_instances', 0)
+            print(f"[NESTING_API] Fast engine result: success={result.get('success', False)}, "
+                  f"utilization={result.get('total_utilization', 0):.1%}, "
+                  f"boards={result.get('total_boards_used', 0)}, "
+                  f"parts={parts_fitted}/{parts_required}")
+        else:
+            print(f"[NESTING_API] Nesting failed: {result.get('error', 'Unknown error') if result else 'No result'}")
         
         print(f"[MULTI_BOARD_NESTING] Optimization complete: {result['total_boards_used']} boards, "
               f"{result['total_scrap_percentage']:.1%} scrap, {result['total_utilization']:.1%} utilization")
@@ -8465,6 +8585,20 @@ def calculate_nesting_with_existing_quantities():
                 'all_parts_fitted': False
             })
         
+    except TimeoutError as e:
+        print(f"Nesting calculation timeout: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Nesting calculation timeout - please try with fewer parts or contact support',
+            'results': [],
+            'best_board': None,
+            'parts_summary': {
+                'total_parts': 0,
+                'total_instances': 0,
+                'material': 'Unknown',
+                'thickness_mm': 0
+            }
+        }), 408  # Request Timeout
     except Exception as e:
         print(f"Multi-board nesting calculation error: {e}")
         import traceback
