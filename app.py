@@ -243,7 +243,7 @@ def get_current_user():
 
 # Nesting functionality removed for deployment
 
-def calculate_cost(area, config, material, thickness_mm, object_parts_count, part_entities=None, layers=None, length_mm=0.0, width_mm=0.0):
+def calculate_cost(area, config, material, thickness_mm, object_parts_count, part_entities=None, layers=None, length_mm=0.0, width_mm=0.0, punch_count=0):
     try:
         # Material validation - critical for accurate calculations
         if not material or material.strip() == '':
@@ -532,6 +532,15 @@ def calculate_cost(area, config, material, thickness_mm, object_parts_count, par
             print(f"    V-groove price per meter: ${vgroove_price:.2f}")
             print(f"    V-groove cost: ${vgroove_cost:.2f}")
         
+        # Punch cost calculation ($5 per punch)
+        punch_cost = 0.0
+        if punch_count > 0:
+            punch_price = 5.0  # $5 per punch
+            punch_cost = punch_count * punch_price
+            print(f"    Punch count: {punch_count}")
+            print(f"    Punch price per unit: ${punch_price:.2f}")
+            print(f"    Punch cost: ${punch_cost:.2f}")
+        
         # Validate and fix infinite values
         if not np.isfinite(laser_cost_total) or np.isnan(laser_cost_total):
             laser_cost_total = 0.0
@@ -541,9 +550,11 @@ def calculate_cost(area, config, material, thickness_mm, object_parts_count, par
             bending_cost = 0.0
         if not np.isfinite(vgroove_cost) or np.isnan(vgroove_cost):
             vgroove_cost = 0.0
+        if not np.isfinite(punch_cost) or np.isnan(punch_cost):
+            punch_cost = 0.0
         
-        # Total cost (laser + material + bending + vgroove)
-        total_cost = laser_cost_total + material_cost + bending_cost + vgroove_cost
+        # Total cost (laser + material + bending + vgroove + punch)
+        total_cost = laser_cost_total + material_cost + bending_cost + vgroove_cost + punch_cost
         
         # Final validation of total cost
         if not np.isfinite(total_cost) or np.isnan(total_cost):
@@ -584,6 +595,8 @@ def calculate_cost(area, config, material, thickness_mm, object_parts_count, par
             'bending_cost': validate_value(bending_cost),
             'vgroove_length_meters': validate_value(vgroove_length_meters),
             'vgroove_cost': validate_value(vgroove_cost),
+            'punch_count': int(validate_value(punch_count, 0)),
+            'punch_cost': validate_value(punch_cost),
             'total_cost': final_total_cost
         }
     except Exception as e:
@@ -1135,6 +1148,7 @@ def find_connected_parts(entities, layers=None):
         spline_entities = []  # SPLINE entities
         vgroove_entities = []  # V-GROOVE entities
         bending_entities = []  # BENDING entities
+        punch_entities = []  # PUNCH layer entities (circles)
         arc_entities = []  # ARC entities (common in ornamental patterns)
         line_entities = []  # LINE entities
         other_entities = []  # Other entity types
@@ -1166,6 +1180,9 @@ def find_connected_parts(entities, layers=None):
                 vgroove_entities.append(entity)
             elif layer_name.upper() == 'BENDING':
                 bending_entities.append(entity)
+            elif layer_name.upper() == 'PUNCH' and entity_type == 'CIRCLE':
+                # PUNCH layer circles for punching operations
+                punch_entities.append(entity)
             elif layer_name == '0' and color == 7:
                 layer0_entities.append(entity)
             elif layer_name.upper() == 'WHITE' and color == 7:
@@ -1183,8 +1200,9 @@ def find_connected_parts(entities, layers=None):
         print(f"LINE entities: {len(line_entities)}")
         print(f"V-GROOVE entities: {len(vgroove_entities)}")
         print(f"BENDING entities: {len(bending_entities)}")
+        print(f"PUNCH entities: {len(punch_entities)}")
         print(f"Other entities: {len(other_entities)}")
-        print(f"Total entities processed: {len(layer0_entities) + len(circle_entities) + len(ellipse_entities) + len(spline_entities) + len(arc_entities) + len(line_entities) + len(vgroove_entities) + len(bending_entities) + len(other_entities)}")
+        print(f"Total entities processed: {len(layer0_entities) + len(circle_entities) + len(ellipse_entities) + len(spline_entities) + len(arc_entities) + len(line_entities) + len(vgroove_entities) + len(bending_entities) + len(punch_entities) + len(other_entities)}")
         print(f"Frame entities (for connectivity): {len(layer0_entities) + len(arc_entities) + len(line_entities) + len(spline_entities)}")
         print(f"=== END ENTITY SEPARATION DEBUG ===")
         
@@ -5143,6 +5161,17 @@ def upload_file():
                         except Exception:
                             pass
 
+                    # Calculate punch count for this part (circles on PUNCH layer)
+                    punch_count = 0
+                    for entity in part_entities:
+                        if hasattr(entity, 'dxf'):
+                            layer_name = getattr(entity.dxf, 'layer', 'UNKNOWN')
+                            entity_type = entity.dxftype()
+                            if layer_name.upper() == 'PUNCH' and entity_type == 'CIRCLE':
+                                punch_count += 1
+                    
+                    print(f"  🔨 Part {part_number} punch count: {punch_count}")
+                    
                     # Add to part_images
                     part_images.append({
                         'part_number': part_number,
@@ -5155,7 +5184,8 @@ def upload_file():
                         'applied_material_name': eff_material_name,
                         'applied_thickness': eff_thickness_mm,
                         'applied_grade': eff_grade,
-                        'applied_finish': eff_finish
+                        'applied_finish': eff_finish,
+                        'punch_count': punch_count
                     })
                     
                     # Calculate cost for this part using effective material settings
@@ -5367,6 +5397,8 @@ def upload_file():
                                 'bending_cost': 0.0,
                                 'vgroove_length_meters': 0.0,
                                 'vgroove_cost': 0.0,
+                                'punch_count': punch_count,
+                                'punch_cost': 0.0,
                                 'total_cost': 0.0
                             }
                         else:
@@ -5376,7 +5408,7 @@ def upload_file():
                             part_config['piercing_toggle'] = config.get('piercing_toggle')
                             # CRITICAL FIX: Use user's scrap factor from form, not database scrap factor
                             part_config['scrap_factor'] = scrap_factor  # Use the user-input scrap factor
-                            cost_data = calculate_cost(area, part_config, eff_material_name, float(eff_thickness_mm), object_parts_count, part_entities, layers, length_mm, width_mm)
+                            cost_data = calculate_cost(area, part_config, eff_material_name, float(eff_thickness_mm), object_parts_count, part_entities, layers, length_mm, width_mm, punch_count)
                     
                     if cost_data:
                         # Check if there's an error in cost calculation

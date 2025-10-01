@@ -3845,6 +3845,41 @@
             try { renderMaterialsSection(data); } catch(e) { console.warn('renderMaterialsSection failed', e); }
             try { autoFillFromExtractedLabels(data); } catch(e) { console.warn('Auto-fill material from labels (showResults) failed', e); }
             
+            // Auto-populate punching service with calculated punch count
+            try {
+                let totalPunchCount = 0;
+                if (data.part_images) {
+                    data.part_images.forEach(part => {
+                        if (part.punch_count && part.punch_count > 0) {
+                            totalPunchCount += part.punch_count;
+                        }
+                    });
+                }
+                
+                if (totalPunchCount > 0) {
+                    // Auto-check the punching service
+                    const punchingCheckbox = document.getElementById('punching');
+                    const punchingQuantityInput = punchingCheckbox.closest('.service-item').querySelector('.service-quantity');
+                    const punchingPriceInput = punchingCheckbox.closest('.service-item').querySelector('.service-price');
+                    
+                    if (punchingCheckbox && punchingQuantityInput && punchingPriceInput) {
+                        punchingCheckbox.checked = true;
+                        punchingQuantityInput.value = totalPunchCount;
+                        punchingPriceInput.value = '5.00';
+                        
+                        // Show the inputs
+                        const punchingInputs = punchingCheckbox.closest('.service-item').querySelector('.service-inputs');
+                        if (punchingInputs) {
+                            punchingInputs.style.display = 'flex';
+                        }
+                        
+                        // Update the total
+                        updateServiceTotal(punchingCheckbox.closest('.service-item'));
+                        updateExternalServicesTotal();
+                    }
+                }
+            } catch(e) { console.warn('Auto-populate punching service failed', e); }
+            
                         // Display individual parts if available
             if (data.part_images && data.part_images.length > 0) {
                 const partsSection = document.createElement('div');

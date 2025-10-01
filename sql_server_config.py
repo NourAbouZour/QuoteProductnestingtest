@@ -260,52 +260,49 @@ def initialize_sql_server_connection():
             }
         ]
     
-    # Since we're using direct pyodbc approach, we don't need SQLAlchemy connection methods
-    logging.info("Using direct pyodbc approach - skipping SQLAlchemy connection methods")
-    return True
-    # If all SQLAlchemy methods failed, try direct pyodbc approach
-logging.info("\n--- Trying Direct pyodbc Fallback ---")
-try:
-        import pyodbc
-        
-        # Create direct pyodbc connection string
-        direct_conn_str = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={SQL_SERVER_CONFIG['server']},1433;DATABASE={SQL_SERVER_CONFIG['database']};UID={SQL_SERVER_CONFIG['username']};PWD={SQL_SERVER_CONFIG['password']};Encrypt=no;TrustServerCertificate=yes"
-        
-        logging.info(f"Direct pyodbc connection string: {direct_conn_str}")
-        
-        # Test direct connection
-        conn = pyodbc.connect(direct_conn_str, timeout=10)
-        logging.info("SUCCESS: Direct pyodbc connection successful")
-        
-        # Test basic query
-        cursor = conn.cursor()
-        cursor.execute("SELECT 1 as test")
-        result = cursor.fetchone()
-        logging.info(f"SUCCESS: Direct pyodbc query successful: {result[0]}")
-        
-        conn.close()
-        logging.info("SUCCESS: Direct pyodbc connection test successful")
-        
-        # Create SQLAlchemy engine with the working connection string
-        working_connection_string = f"mssql+pyodbc://{SQL_SERVER_CONFIG['username']}:{SQL_SERVER_CONFIG['password']}@{SQL_SERVER_CONFIG['server']},1433/{SQL_SERVER_CONFIG['database']}?driver={SQL_SERVER_CONFIG['driver']}&TrustServerCertificate=yes&Encrypt=no"
-        
-        sql_server_engine = create_engine(
-            working_connection_string,
-            poolclass=QueuePool,
-            pool_size=5,
-            max_overflow=10,
-            pool_pre_ping=True,
-            pool_recycle=1800,
-            echo=False
-        )
-        
-        logging.info("SUCCESS: SQLAlchemy engine created with working connection string")
-         return True
-        
-    except Exception as e:
-        logging.error(f"FAILED: Direct pyodbc fallback also failed: {e}")
-        logging.error("Full traceback of last attempt: {traceback.format_exc()}")
-        return False
+        # If all SQLAlchemy methods failed, try direct pyodbc approach
+        logging.info("\n--- Trying Direct pyodbc Fallback ---")
+        try:
+            import pyodbc
+            
+            # Create direct pyodbc connection string
+            direct_conn_str = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={SQL_SERVER_CONFIG['server']},1433;DATABASE={SQL_SERVER_CONFIG['database']};UID={SQL_SERVER_CONFIG['username']};PWD={SQL_SERVER_CONFIG['password']};Encrypt=no;TrustServerCertificate=yes"
+            
+            logging.info(f"Direct pyodbc connection string: {direct_conn_str}")
+            
+            # Test direct connection
+            conn = pyodbc.connect(direct_conn_str, timeout=10)
+            logging.info("SUCCESS: Direct pyodbc connection successful")
+            
+            # Test basic query
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 as test")
+            result = cursor.fetchone()
+            logging.info(f"SUCCESS: Direct pyodbc query successful: {result[0]}")
+            
+            conn.close()
+            logging.info("SUCCESS: Direct pyodbc connection test successful")
+            
+            # Create SQLAlchemy engine with the working connection string
+            working_connection_string = f"mssql+pyodbc://{SQL_SERVER_CONFIG['username']}:{SQL_SERVER_CONFIG['password']}@{SQL_SERVER_CONFIG['server']},1433/{SQL_SERVER_CONFIG['database']}?driver={SQL_SERVER_CONFIG['driver']}&TrustServerCertificate=yes&Encrypt=no"
+            
+            sql_server_engine = create_engine(
+                working_connection_string,
+                poolclass=QueuePool,
+                pool_size=5,
+                max_overflow=10,
+                pool_pre_ping=True,
+                pool_recycle=1800,
+                echo=False
+            )
+            
+            logging.info("SUCCESS: SQLAlchemy engine created with working connection string")
+            return True
+            
+        except Exception as e:
+            logging.error(f"FAILED: Direct pyodbc fallback also failed: {e}")
+            logging.error("Full traceback of last attempt: {traceback.format_exc()}")
+            return False
 
 def get_sql_server_session():
     """Get SQL Server session"""
@@ -433,7 +430,7 @@ def search_customers(company_name_pattern):
         logging.info(f"Search parameter: {search_pattern}")
         
         cursor.execute(query, search_params)
-            customers = []
+        customers = []
         
         logging.info("Processing search results...")
         row_count = 0
@@ -455,7 +452,7 @@ def search_customers(company_name_pattern):
                 'first_name': customer.get('firstname', customer.get('first_name', customer.get('contact', 'N/A'))),
                 'telephone': customer.get('tel', customer.get('telephone', customer.get('phone', 'N/A'))),
                 'email': customer.get('email', 'N/A'),
-                'address': customer.get('address', customer.get('location', 'N/A')),
+                'address': customer.get('Address', customer.get('location', 'N/A')),
                 'vat_id': customer.get('vatid', customer.get('vat_id', 'N/A'))
             }
             

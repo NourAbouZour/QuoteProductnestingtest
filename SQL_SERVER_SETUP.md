@@ -81,7 +81,7 @@ When you select a customer, the following fields are automatically filled:
 - **Contact Name** ← `FirstName` from database
 - **Telephone** ← `TEL` from database
 - **Email** ← `EMAIL` from database
-- **Address** ← Concatenated address fields from database
+- **Company Address** ← `Address`Concatenated address fields from database
 
 ### Manual Fields
 
