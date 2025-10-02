@@ -113,10 +113,10 @@ def initialize_sql_server_connection():
         import socket
         import subprocess
         
-        # Test if server is reachable
+        # Test if server is reachable (increased timeout for slower networks)
         logging.info(f"Testing network connectivity to {SQL_SERVER_CONFIG['server']}...")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(5)
+        sock.settimeout(15)
         result = sock.connect_ex((SQL_SERVER_CONFIG['server'], 1433))
         sock.close()
         
@@ -126,11 +126,11 @@ def initialize_sql_server_connection():
             logging.error(f"FAILED: Cannot connect to {SQL_SERVER_CONFIG['server']}:1433")
             logging.error("This indicates a network connectivity issue")
             
-        # Test ping
+        # Test ping (increased timeout for slower networks)
         try:
             logging.info(f"Testing ping to {SQL_SERVER_CONFIG['server']}...")
             result = subprocess.run(['ping', '-n', '1', SQL_SERVER_CONFIG['server']], 
-                                  capture_output=True, text=True, timeout=10)
+                                  capture_output=True, text=True, timeout=20)
             if result.returncode == 0:
                 logging.info("SUCCESS: Ping successful")
             else:
@@ -169,11 +169,12 @@ def initialize_sql_server_connection():
             logging.error(f"FAILED: {target_driver} not found in available drivers")
             logging.error("This indicates ODBC driver installation issue")
         
-        # Test direct connection
-        direct_conn_str = f"DRIVER={{{target_driver}}};SERVER={SQL_SERVER_CONFIG['server']},1433;DATABASE={SQL_SERVER_CONFIG['database']};UID={SQL_SERVER_CONFIG['username']};PWD={SQL_SERVER_CONFIG['password']};Encrypt=no;TrustServerCertificate=yes"
+        # Test direct connection with extended timeout
+        direct_conn_str = f"DRIVER={{{target_driver}}};SERVER={SQL_SERVER_CONFIG['server']},1433;DATABASE={SQL_SERVER_CONFIG['database']};UID={SQL_SERVER_CONFIG['username']};PWD={SQL_SERVER_CONFIG['password']};Encrypt=no;TrustServerCertificate=yes;Connection Timeout=30"
         logging.info(f"Testing direct pyodbc connection string: {direct_conn_str.replace(SQL_SERVER_CONFIG['password'], '***')}")
         
-        conn = pyodbc.connect(direct_conn_str, timeout=10)
+        # Increased timeout to 30 seconds for slower networks
+        conn = pyodbc.connect(direct_conn_str, timeout=30)
         logging.info("SUCCESS: Direct pyodbc connection established")
         
         # Test basic query
@@ -265,13 +266,13 @@ def initialize_sql_server_connection():
         try:
             import pyodbc
             
-            # Create direct pyodbc connection string
-            direct_conn_str = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={SQL_SERVER_CONFIG['server']},1433;DATABASE={SQL_SERVER_CONFIG['database']};UID={SQL_SERVER_CONFIG['username']};PWD={SQL_SERVER_CONFIG['password']};Encrypt=no;TrustServerCertificate=yes"
+            # Create direct pyodbc connection string with extended timeout
+            direct_conn_str = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={SQL_SERVER_CONFIG['server']},1433;DATABASE={SQL_SERVER_CONFIG['database']};UID={SQL_SERVER_CONFIG['username']};PWD={SQL_SERVER_CONFIG['password']};Encrypt=no;TrustServerCertificate=yes;Connection Timeout=30"
             
             logging.info(f"Direct pyodbc connection string: {direct_conn_str}")
             
-            # Test direct connection
-            conn = pyodbc.connect(direct_conn_str, timeout=10)
+            # Test direct connection with increased timeout
+            conn = pyodbc.connect(direct_conn_str, timeout=30)
             logging.info("SUCCESS: Direct pyodbc connection successful")
             
             # Test basic query
@@ -332,11 +333,12 @@ def search_customers(company_name_pattern):
     try:
         import pyodbc
         
-        # Create direct pyodbc connection
-        direct_conn_str = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={SQL_SERVER_CONFIG['server']},1433;DATABASE={SQL_SERVER_CONFIG['database']};UID={SQL_SERVER_CONFIG['username']};PWD={SQL_SERVER_CONFIG['password']};Encrypt=no;TrustServerCertificate=yes"
+        # Create direct pyodbc connection with extended timeout
+        direct_conn_str = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={SQL_SERVER_CONFIG['server']},1433;DATABASE={SQL_SERVER_CONFIG['database']};UID={SQL_SERVER_CONFIG['username']};PWD={SQL_SERVER_CONFIG['password']};Encrypt=no;TrustServerCertificate=yes;Connection Timeout=30"
         logging.info(f"Direct connection string: {direct_conn_str.replace(SQL_SERVER_CONFIG['password'], '***')}")
         
-        conn = pyodbc.connect(direct_conn_str, timeout=10)
+        # Increased timeout to 30 seconds for slower networks
+        conn = pyodbc.connect(direct_conn_str, timeout=30)
         logging.info("SUCCESS: Direct pyodbc connection established for search")
         
         cursor = conn.cursor()
@@ -399,28 +401,45 @@ def search_customers(company_name_pattern):
         for col_name, col_type in columns:
             logging.info(f"  - {col_name} ({col_type})")
         
-        # Try to find name-related columns
-        name_columns = []
-        for col_name, col_type in columns:
-            if any(keyword in col_name.lower() for keyword in ['name', 'file', 'company', 'client']):
-                name_columns.append(col_name)
+        # Find the primary company name column (prioritize FileName, then others)
+        primary_name_columns = []
+        secondary_name_columns = []
         
-        if not name_columns:
-            logging.error("FAILED: No name-related columns found")
+        # Priority order for company name fields
+        priority_keywords = ['filename', 'file_name', 'companyname', 'arabic_name']
+        secondary_keywords = ['abrv', 'description']
+        
+        for col_name, col_type in columns:
+            col_lower = col_name.lower()
+            # Check for primary company name fields (highest priority)
+            if any(keyword == col_lower for keyword in priority_keywords):
+                primary_name_columns.append(col_name)
+            # Check for secondary fields (lower priority, but still relevant)
+            elif any(keyword in col_lower for keyword in secondary_keywords):
+                secondary_name_columns.append(col_name)
+        
+        # Use primary columns, fallback to secondary if none found
+        search_columns = primary_name_columns if primary_name_columns else secondary_name_columns
+        
+        if not search_columns:
+            logging.error("FAILED: No company name columns found")
             conn.close()
             return []
         
-        logging.info(f"Using name columns: {name_columns}")
+        logging.info(f"Using search columns (primary): {primary_name_columns}")
+        logging.info(f"Using search columns (secondary): {secondary_name_columns}")
+        logging.info(f"Final search columns: {search_columns}")
         
-        # Build a dynamic search query
+        # Build a dynamic search query focused on company name only
         search_conditions = []
-        for col in name_columns:
+        for col in search_columns:
             search_conditions.append(f"{col} LIKE ?")
         
         query = f"""
             SELECT TOP 50 *
             FROM {working_table}
             WHERE {' OR '.join(search_conditions)}
+            ORDER BY FileName
         """
         
         search_pattern = f"%{company_name_pattern}%"
@@ -445,19 +464,52 @@ def search_customers(company_name_pattern):
                 customer[col_name.lower()] = value
                 logging.info(f"  {col_name}: {value}")
             
-            # Map to expected fields with fallbacks
+           
+            # Build full address from multiple fields
+            address_parts = []
+            if customer.get('bldg'):
+                address_parts.append(str(customer.get('bldg')).strip())
+            if customer.get('adress_desc'):
+                address_parts.append(str(customer.get('adress_desc')).strip())
+            if customer.get('main_region'):
+                address_parts.append(str(customer.get('main_region')).strip())
+            if customer.get('country_desc'):
+                address_parts.append(str(customer.get('country_desc')).strip())
+            
+            full_address = ', '.join(address_parts) if address_parts else customer.get('address', customer.get('location', 'N/A'))
+            
+            # Build contact name (prefer contact person, fallback to file first/last name)
+            contact_first = customer.get('cont_firstname') or customer.get('firstname') or ''
+            contact_last = customer.get('cont_lastname') or customer.get('lastname') or ''
+            contact_name = f"{contact_first} {contact_last}".strip() if (contact_first or contact_last) else 'N/A'
+            
+            # Get best available phone (prioritize filled fields)
+            telephone = customer.get('tel') or customer.get('tel3') or customer.get('tel2') or customer.get('telephone') or customer.get('phone') or 'N/A'
+            if telephone and telephone != 'N/A':
+                telephone = str(telephone).strip()
+            
+            # Get best available email (prioritize filled fields)
+            email = customer.get('email') or customer.get('cont_email1') or customer.get('cont_email2') or customer.get('cont_email3') or 'N/A'
+            if email and email != 'N/A':
+                email = str(email).strip()
+            
             customer_record = {
                 'file_number': customer.get('filenumber', customer.get('file_number', customer.get('id', 'N/A'))),
                 'file_name': customer.get('filename', customer.get('file_name', customer.get('name', customer.get('company', 'N/A')))),
-                'first_name': customer.get('firstname', customer.get('first_name', customer.get('contact', 'N/A'))),
-                'telephone': customer.get('tel', customer.get('telephone', customer.get('phone', 'N/A'))),
-                'email': customer.get('email', 'N/A'),
-                'address': customer.get('Address', customer.get('location', 'N/A')),
+                'first_name': contact_name,
+                'telephone': telephone,
+                'email': email,
+                'address': full_address,
                 'vat_id': customer.get('vatid', customer.get('vat_id', 'N/A'))
             }
             
             customers.append(customer_record)
             logging.info(f"  Customer {row_count}: {customer_record['file_name']} (File: {customer_record['file_number']})")
+            logging.info(f"    → Contact Name: {customer_record['first_name']}")
+            logging.info(f"    → Address: {customer_record['address']}")
+            logging.info(f"    → Phone: {customer_record['telephone']}")
+            logging.info(f"    → Email: {customer_record['email']}")
+            logging.info(f"    → VAT ID: {customer_record['vat_id']}")
         
         conn.close()
         logging.info(f"SUCCESS: Search completed successfully, found {len(customers)} customers")

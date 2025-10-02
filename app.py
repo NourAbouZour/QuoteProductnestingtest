@@ -532,10 +532,10 @@ def calculate_cost(area, config, material, thickness_mm, object_parts_count, par
             print(f"    V-groove price per meter: ${vgroove_price:.2f}")
             print(f"    V-groove cost: ${vgroove_cost:.2f}")
         
-        # Punch cost calculation ($5 per punch)
+        # Punch cost calculation ($0.01 per punch)
         punch_cost = 0.0
         if punch_count > 0:
-            punch_price = 5.0  # $5 per punch
+            punch_price = 0.01  # $0.01 per punch
             punch_cost = punch_count * punch_price
             print(f"    Punch count: {punch_count}")
             print(f"    Punch price per unit: ${punch_price:.2f}")
@@ -554,7 +554,7 @@ def calculate_cost(area, config, material, thickness_mm, object_parts_count, par
             punch_cost = 0.0
         
         # Total cost (laser + material + bending + vgroove + punch)
-        total_cost = laser_cost_total + material_cost + bending_cost + vgroove_cost + punch_cost
+        total_cost = laser_cost_total + material_cost + bending_cost + vgroove_cost 
         
         # Final validation of total cost
         if not np.isfinite(total_cost) or np.isnan(total_cost):
