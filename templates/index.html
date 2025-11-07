@@ -3691,9 +3691,13 @@
 
         function renderCostBreakdownForPart(partNumber, partCost) {
             try {
-                const partCard = document.querySelector(`[data-part="${partNumber}"]`);
-                if (!partCard) return;
-                // Remove any existing card to avoid duplicates
+                const partCard = document.querySelector(`.part-card[data-part="${partNumber}"]`);
+                if (!partCard) {
+                    console.warn(`Part card not found for part ${partNumber}`);
+                    return;
+                }
+                
+                // Remove any existing cost breakdown to avoid duplicates
                 const existing = partCard.querySelector('.part-cost-info');
                 if (existing) existing.remove();
 
@@ -3703,7 +3707,11 @@
                 // Fallback: if cd is missing core dimensions, derive them from part_images
                 try {
                     const allParts = (window.currentData && Array.isArray(window.currentData.part_images)) ? window.currentData.part_images : [];
-                    const partImg = allParts.find(p => parseInt(p.part_number) === parseInt(partNumber));
+                    const partImg = allParts.find(p => {
+                        const pNum = typeof p.part_number === 'string' ? parseInt(p.part_number) : p.part_number;
+                        const partNum = typeof partNumber === 'string' ? parseInt(partNumber) : partNumber;
+                        return pNum === partNum;
+                    });
                     if (partImg) {
                         const derived = { ...cd };
                         if (derived.area_sq_mm == null && typeof partImg.area === 'number') {
@@ -3736,6 +3744,21 @@
                 const costInfo = document.createElement('div');
                 costInfo.className = 'part-cost-info';
 
+                // Check if we should show costs (only after Calculate Quote is clicked)
+                const shouldShowCosts = window.__quoteCalculated === true;
+                
+                // If costs shouldn't be shown, zero out all cost values but keep dimensions
+                let displayCd = { ...cd };
+                if (!shouldShowCosts) {
+                    displayCd.laser_cost = 0;
+                    displayCd.material_cost = 0;
+                    displayCd.bending_cost = 0;
+                    displayCd.vgroove_cost = 0;
+                    displayCd.total_cost = 0;
+                    // Keep dimensions and non-cost values
+                    // area_sq_mm, length_mm, width_mm, perimeter_meters, etc. remain unchanged
+                }
+
                 // Always show the cost breakdown card. If there's an error, display the warning above it.
                 if (partCost && partCost.calculation_error) {
                     const errorHtml = `
@@ -3750,18 +3773,32 @@
                         </div>
                     `;
                     costInfo.classList.add('has-error');
-                    costInfo.innerHTML = errorHtml + buildCostBreakdownHTML(cd, objectPartsCount);
+                    costInfo.innerHTML = errorHtml + buildCostBreakdownHTML(displayCd, objectPartsCount);
                 } else {
-                    costInfo.innerHTML = buildCostBreakdownHTML(cd, objectPartsCount);
+                    costInfo.innerHTML = buildCostBreakdownHTML(displayCd, objectPartsCount);
                 }
 
-                partCard.appendChild(costInfo);
+                // Insert the cost breakdown BEFORE the action buttons
+                const actionButtons = partCard.querySelector('.action-buttons');
+                if (actionButtons) {
+                    actionButtons.insertAdjacentElement('beforebegin', costInfo);
+                } else {
+                    // Fallback: append to end of card
+                    partCard.appendChild(costInfo);
+                }
+                
+                console.log(`✅ Cost breakdown rendered for part ${partNumber}`);
             } catch (e) {
                 console.error('Error rendering cost breakdown for part', partNumber, e);
             }
         }
 
         function showResults(data) {
+            // Initialize quote calculation flag if not set
+            if (window.__quoteCalculated === undefined) {
+                window.__quoteCalculated = false;
+            }
+            
             // Clean previously injected dynamic sections to avoid duplicates
             try {
                 const resultsSection = document.getElementById('resultsSection');
@@ -3896,8 +3933,28 @@
                 
                 const partsGrid = document.getElementById('partsGrid');
                 data.part_images.forEach((part, index) => {
-                    const costData = (data.part_costs || []).find(pc => pc.part_number === part.part_number);
+                    // Match cost data by part number (handle both string and number)
+                    const costData = (data.part_costs || []).find(pc => {
+                        const pcNum = typeof pc.part_number === 'string' ? parseInt(pc.part_number) : pc.part_number;
+                        const partNum = typeof part.part_number === 'string' ? parseInt(part.part_number) : part.part_number;
+                        return pcNum === partNum;
+                    });
+                    
+                    // Debug: Log cost data for troubleshooting
+                    if (!costData || !costData.cost_data || typeof costData.cost_data.total_cost !== 'number') {
+                        console.warn(`Part ${part.part_number}: No valid cost data found`, {
+                            costData: costData,
+                            part_costs_length: (data.part_costs || []).length,
+                            part_costs: data.part_costs
+                        });
+                    }
+                    
                     const baseCost = (costData && costData.cost_data && typeof costData.cost_data.total_cost === 'number') ? costData.cost_data.total_cost : 0;
+                    
+                    // Check if we should show costs (only after Calculate Quote is clicked)
+                    // If calculateQuote hasn't been called, show zeros
+                    const shouldShowCosts = window.__quoteCalculated === true;
+                    const displayCost = shouldShowCosts ? baseCost : 0;
                     const L = (typeof part.length_mm === 'number') ? part.length_mm : (costData && typeof costData.length_mm === 'number' ? costData.length_mm : null);
                     const W = (typeof part.width_mm === 'number') ? part.width_mm : (costData && typeof costData.width_mm === 'number' ? costData.width_mm : null);
                     const areaSqMm = (typeof part.area === 'number') ? (part.area * 1e6) : (costData && costData.cost_data && typeof costData.cost_data.area_sq_mm === 'number' ? costData.cost_data.area_sq_mm : (L && W ? L * W : null));
@@ -3911,11 +3968,39 @@
                     const extractedLabel = part.extracted_label || {};
                     const label = { ...extractedLabel, ...partLabel }; // partLabel overrides extractedLabel
                     
+                    // CRITICAL: Use applied material fields from cost_data or part_images if available
+                    // This ensures material info is shown correctly after manual selection
+                    const appliedMaterial = costData && costData.cost_data ? {
+                        material_name: costData.cost_data.applied_material_name || costData.applied_material_name || label.material_name || '',
+                        thickness: costData.cost_data.applied_thickness !== undefined ? costData.cost_data.applied_thickness : (costData.applied_thickness !== undefined ? costData.applied_thickness : label.thickness),
+                        grade: costData.cost_data.applied_grade !== undefined ? costData.cost_data.applied_grade : (costData.applied_grade !== undefined ? costData.applied_grade : label.grade),
+                        finish: costData.cost_data.applied_finish || costData.applied_finish || label.finish || ''
+                    } : {
+                        material_name: label.material_name || '',
+                        thickness: label.thickness,
+                        grade: label.grade,
+                        finish: label.finish || ''
+                    };
+                    
+                    // Also check part_images for applied material info
+                    if (part.applied_material_name) {
+                        appliedMaterial.material_name = part.applied_material_name;
+                    }
+                    if (part.applied_thickness !== undefined) {
+                        appliedMaterial.thickness = part.applied_thickness;
+                    }
+                    if (part.applied_grade !== undefined) {
+                        appliedMaterial.grade = part.applied_grade;
+                    }
+                    if (part.applied_finish) {
+                        appliedMaterial.finish = part.applied_finish;
+                    }
+                    
                     const typeText = extractedLabel.type_text || '';
                     const qtyFromLabel = (typeof label.quantity === 'number' && label.quantity >= 0) ? label.quantity : '';
-                    const matText = (label.material_name || '');
-                    const thText = (label.thickness != null ? `${label.thickness} mm` : '');
-                    const gfText = [label.grade != null ? String(label.grade) : '', label.finish || ''].filter(Boolean).join(' / ');
+                    const matText = appliedMaterial.material_name || '';
+                    const thText = (appliedMaterial.thickness != null) ? `${appliedMaterial.thickness} mm` : '';
+                    const gfText = [appliedMaterial.grade != null ? String(appliedMaterial.grade) : '', appliedMaterial.finish || ''].filter(Boolean).join(' / ');
                     partCard.innerHTML = `
                         <div class="part-header">
                             <h4>Part ${part.part_number}</h4>
@@ -3958,8 +4043,8 @@
                             <button class="counter-btn" data-part="${part.part_number}" data-action="increase" title="Click: +1, Hold: continuous +10">+</button>
                         </div>
                         <div class="part-cost">
-                            <div class="unit-cost">Unit: $${baseCost.toFixed(2)}</div>
-                            <div class="total-cost">Total: $${(baseCost * (qtyFromLabel || 1)).toFixed(2)}</div>
+                            <div class="unit-cost">Unit: $${displayCost.toFixed(2)}</div>
+                            <div class="total-cost">Total: $${(displayCost * (qtyFromLabel || 1)).toFixed(2)}</div>
                         </div>
                         <div class="action-buttons">
                             <button class="action-btn delete-btn" onclick="deletePart(${part.part_number})">Delete</button>
@@ -3971,6 +4056,39 @@
                 
                 // Add long-press functionality for counter buttons
                 setupLongPressCounters();
+                
+                // CRITICAL: Update all part costs after creating cards to ensure costs are displayed
+                // This is especially important after reprocessing with material selections
+                setTimeout(() => {
+                    // Ensure window.currentData is set (it should be set in showResults before this)
+                    if (!window.currentData) {
+                        window.currentData = data;
+                    }
+                    
+                    // Update cost displays for each part card
+                    data.part_images.forEach((part) => {
+                        if (part.part_number) {
+                            updateCostForPart(part.part_number);
+                        }
+                    });
+                    
+                    // CRITICAL: Render cost breakdowns for all parts
+                    if (data.part_costs && data.part_costs.length > 0) {
+                        data.part_costs.forEach(partCost => {
+                            renderCostBreakdownForPart(partCost.part_number, partCost);
+                        });
+                    } else {
+                        // Render breakdowns even if cost_data might be missing (will show zeros)
+                        data.part_images.forEach(part => {
+                            const existing = document.querySelector(`.part-card[data-part="${part.part_number}"] .part-cost-info`);
+                            if (!existing) {
+                                renderCostBreakdownForPart(part.part_number, null);
+                            }
+                        });
+                    }
+                    
+                    updateTotalCost();
+                }, 300);
                 
 
 
@@ -4546,26 +4664,125 @@
         // Check if any parts are missing material information
         function checkMissingMaterials(data) {
             const missingMaterials = [];
+            const partCosts = data && data.part_costs ? data.part_costs : [];
             const partLabels = data && data.part_labels ? data.part_labels : {};
+            const partImages = data && data.part_images ? data.part_images : [];
             
-            Object.keys(partLabels).forEach(partNumber => {
-                const label = partLabels[partNumber];
-                if (!label) return;
+            // Materials that do not require grade/finish
+            const noGf = new Set(['mild steel', 'steel', 'ms', 'aluminum', 'aluminium', 'alu', 'copper', 'brass']);
+            
+            // Create maps for quick lookup
+            const partCostsMap = {};
+            partCosts.forEach(pc => {
+                const pn = pc.part_number;
+                if (pn != null) {
+                    partCostsMap[pn] = pc;
+                }
+            });
+            
+            const partImagesMap = {};
+            partImages.forEach(pi => {
+                const pn = pi.part_number;
+                if (pn != null) {
+                    partImagesMap[pn] = pi;
+                }
+            });
+            
+            // Create a set of all part numbers from part_images to check all parts
+            const allPartNumbers = new Set();
+            partImages.forEach(pi => {
+                if (pi.part_number != null) {
+                    allPartNumbers.add(pi.part_number);
+                }
+            });
+            Object.keys(partLabels).forEach(pn => {
+                allPartNumbers.add(parseInt(pn));
+            });
+            
+            // Helper function to check if material fields are complete
+            function isMaterialComplete(material, thickness, grade, finish) {
+                // Check material and thickness are present
+                const hasMaterial = material && String(material).trim() !== '';
+                const hasThickness = thickness != null && thickness !== '' && parseFloat(thickness) > 0;
                 
-                const hasMaterial = label.material_name && label.material_name.trim() !== '';
-                const hasThickness = label.thickness != null && label.thickness !== '';
-                let hasGrade = label.grade != null && label.grade !== '';
-                let hasFinish = label.finish && String(label.finish).trim() !== '';
-
-                // Materials that do not require grade/finish (treat as satisfied)
-                const matLower = (label.material_name || '').trim().toLowerCase();
-                const noGf = new Set(['mild steel', 'steel', 'ms', 'aluminum', 'aluminium', 'alu', 'copper']);
-                if (noGf.has(matLower)) {
-                    hasGrade = true;
-                    hasFinish = true;
+                if (!hasMaterial || !hasThickness) {
+                    return false;
                 }
                 
-                if (!hasMaterial || !hasThickness || !hasGrade || !hasFinish) {
+                // Check if grade/finish are needed
+                const matLower = String(material || '').trim().toLowerCase();
+                const needsGradeFinish = !noGf.has(matLower);
+                
+                if (!needsGradeFinish) {
+                    // Material doesn't need grade/finish, so it's complete
+                    return true;
+                } else {
+                    // Material needs grade and finish - check if both are present
+                    const hasGrade = grade != null && String(grade).trim() !== '';
+                    const hasFinish = finish != null && String(finish).trim() !== '';
+                    return hasGrade && hasFinish;
+                }
+            }
+            
+            // Check each part
+            for (const partNumber of allPartNumbers) {
+                const partCost = partCostsMap[partNumber];
+                const partImage = partImagesMap[partNumber];
+                const label = partLabels[String(partNumber)];
+                
+                // Priority 1: Check part_costs for parsed material (most reliable)
+                if (partCost) {
+                    const appliedMaterial = partCost.applied_material_name;
+                    const appliedThickness = partCost.applied_thickness;
+                    const appliedGrade = partCost.applied_grade;
+                    const appliedFinish = partCost.applied_finish;
+                    
+                    // Check if material is complete (regardless of cost calculation errors)
+                    // Even if cost calculation failed (e.g., material not in DB), material IS parsed
+                    if (isMaterialComplete(appliedMaterial, appliedThickness, appliedGrade, appliedFinish)) {
+                        // Material is fully parsed and complete - skip this part
+                        continue;
+                    }
+                }
+                
+                // Priority 2: Check part_images for parsed material
+                if (partImage) {
+                    const appliedMaterial = partImage.applied_material_name;
+                    const appliedThickness = partImage.applied_thickness;
+                    const appliedGrade = partImage.applied_grade;
+                    const appliedFinish = partImage.applied_finish;
+                    
+                    if (isMaterialComplete(appliedMaterial, appliedThickness, appliedGrade, appliedFinish)) {
+                        // Material is fully parsed and complete - skip this part
+                        continue;
+                    }
+                }
+                
+                // Priority 3: Check part_labels (raw extracted labels)
+                if (label) {
+                    const labelMaterial = label.material_name;
+                    const labelThickness = label.thickness;
+                    let labelGrade = label.grade;
+                    let labelFinish = label.finish;
+                    
+                    // Materials that do not require grade/finish (treat as satisfied)
+                    const matLower = (labelMaterial || '').trim().toLowerCase();
+                    if (noGf.has(matLower)) {
+                        labelGrade = '0';
+                        labelFinish = '0';
+                    }
+                    
+                    if (isMaterialComplete(labelMaterial, labelThickness, labelGrade, labelFinish)) {
+                        // Material is complete in labels - skip this part
+                        continue;
+                    }
+                    
+                    // Material is incomplete - add to missing list
+                    const hasMaterial = labelMaterial && String(labelMaterial).trim() !== '';
+                    const hasThickness = labelThickness != null && labelThickness !== '';
+                    const hasGrade = labelGrade != null && String(labelGrade).trim() !== '';
+                    const hasFinish = labelFinish != null && String(labelFinish).trim() !== '';
+                    
                     missingMaterials.push({
                         partNumber: parseInt(partNumber),
                         label: label,
@@ -4576,8 +4793,20 @@
                             finish: !hasFinish
                         }
                     });
+                } else {
+                    // No label, no part_cost, no part_image - material is completely missing
+                    missingMaterials.push({
+                        partNumber: parseInt(partNumber),
+                        label: {},
+                        missing: {
+                            material: true,
+                            thickness: true,
+                            grade: true,
+                            finish: true
+                        }
+                    });
                 }
-            });
+            }
             
             return missingMaterials;
         }
@@ -4877,7 +5106,7 @@
         }
 
         // Apply material selections and proceed with analysis
-        function applyMaterialSelections() {
+        async function applyMaterialSelections() {
             const missingMaterials = window.__missingMaterials || [];
             const data = window.__popupData;
             
@@ -4963,37 +5192,146 @@
             // Update the global currentData as well
             window.currentData = data;
             
-            // Update part_costs with the new material information for calculations
-            updatePartCostsWithMaterialInfo(data, updatedPartLabels);
-            
-            // Update part cards with new material information
-            updatePartCardsWithMaterialInfo(data);
-            
             // Close popup
             closeMaterialPopup();
             
-            // Proceed with normal flow
-            try { autoFillFromExtractedLabels(data); } catch(e) { console.warn('Auto-fill labels failed', e); }
+            // Show processing message
+            const processing = document.getElementById('processing');
+            if (processing) processing.style.display = 'block';
             
-            // Remember last upload params for final quote
-            const file = window.__lastFile;
-            window.__lastUploadParams = { 
-                single: true, 
-                fileName: file.name, 
-                materialType: document.getElementById('materialTypeSelect').value, 
-                thickness: document.getElementById('thicknessSelect').value, 
-                grade: document.getElementById('gradeSelect').value, 
-                finish: document.getElementById('finishSelect').value 
-            };
-            
-            // Show results
-            showResults(data);
-            
-            // Show success message with instruction to calculate quote
-            const successMessage = document.getElementById('successMessage');
-            successMessage.textContent = 'Materials applied successfully. Click "Calculate Quote" to see the cost breakdown for each part.';
-            successMessage.style.display = 'block';
-            setTimeout(() => { successMessage.style.display = 'none'; }, 5000);
+            // RECALCULATE COSTS FOR UPDATED PARTS ONLY (NO FILE REPROCESSING)
+            try {
+                console.log('Recalculating costs for updated parts only...');
+                
+                // Get current data from window.currentData
+                const currentData = window.currentData || data;
+                
+                if (!currentData || !currentData.part_costs) {
+                    throw new Error('No existing data found. Please upload the file first.');
+                }
+                
+                // Get admin config (laser_cost, etc.)
+                const laserCostEl = document.getElementById('userLaserCost');
+                const scrapFactorEl = document.getElementById('scrapFactor');
+                const adminConfig = {
+                    laser_cost: laserCostEl ? parseFloat(laserCostEl.value) || 1.50 : 1.50
+                };
+                
+                // Prepare data for recalculation endpoint
+                const recalculationData = {
+                    part_costs: currentData.part_costs,
+                    part_images: currentData.part_images || [],
+                    part_labels: updatedPartLabels,
+                    material_config: {}, // Not needed for recalculation
+                    scrap_factor: scrapFactorEl ? (scrapFactorEl.value || '1.20') : '1.20',
+                    admin_config: adminConfig
+                };
+                
+                console.log('Sending recalculation request for parts:', Object.keys(updatedPartLabels));
+                
+                const resp = await fetch('/api/recalculate-part-costs', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(recalculationData)
+                });
+                
+                if (!resp.ok) {
+                    throw new Error(`Recalculation failed: ${resp.statusText}`);
+                }
+                
+                const recalculationResult = await resp.json();
+                
+                if (!recalculationResult.success) {
+                    throw new Error(recalculationResult.error || 'Recalculation failed');
+                }
+                
+                // Merge recalculation results with existing data
+                const newData = {
+                    ...currentData,
+                    part_costs: recalculationResult.part_costs,
+                    part_images: recalculationResult.part_images,
+                    part_labels: recalculationResult.part_labels || updatedPartLabels
+                };
+                
+                if (processing) processing.style.display = 'none';
+                
+                console.log('Costs recalculated successfully for updated parts');
+                
+                // Reset quote calculation flag - costs should show as zeros until Calculate Quote is clicked
+                window.__quoteCalculated = false;
+                
+                // Update the window.currentData with the recalculated data
+                window.currentData = newData;
+                newData.success = true; // Ensure success flag is set
+                
+                // Proceed with normal flow
+                try { autoFillFromExtractedLabels(newData); } catch(e) { console.warn('Auto-fill labels failed', e); }
+                
+                // Remember last upload params for final quote (preserve existing)
+                if (window.__lastUploadParams) {
+                    // Keep existing params
+                } else {
+                    const file = window.__lastFile;
+                    if (file) {
+                        const materialTypeEl = document.getElementById('materialTypeSelect');
+                        const thicknessEl = document.getElementById('thicknessSelect');
+                        const gradeEl = document.getElementById('gradeSelect');
+                        const finishEl = document.getElementById('finishSelect');
+                        
+                        window.__lastUploadParams = { 
+                            single: true, 
+                            fileName: file.name, 
+                            materialType: materialTypeEl ? materialTypeEl.value : '', 
+                            thickness: thicknessEl ? thicknessEl.value : '', 
+                            grade: gradeEl ? gradeEl.value : '', 
+                            finish: finishEl ? finishEl.value : '' 
+                        };
+                    }
+                }
+                
+                // Show results with the recalculated data
+                showResults(newData);
+                
+                // Show success message
+                const successMessage = document.getElementById('successMessage');
+                if (successMessage) {
+                    successMessage.textContent = 'Materials applied successfully. Part characteristics are displayed. Click "Calculate Quote" to see cost breakdown.';
+                    successMessage.style.display = 'block';
+                    setTimeout(() => { successMessage.style.display = 'none'; }, 5000);
+                }
+            } catch (error) {
+                console.error('Error recalculating costs for updated parts:', error);
+                if (processing) processing.style.display = 'none';
+                
+                // Fallback to local update if recalculation fails
+                updatePartCostsWithMaterialInfo(data, updatedPartLabels);
+                updatePartCardsWithMaterialInfo(data);
+                
+                // Proceed with normal flow
+                try { autoFillFromExtractedLabels(data); } catch(e) { console.warn('Auto-fill labels failed', e); }
+                
+                const file = window.__lastFile;
+                if (file) {
+                    const materialTypeEl = document.getElementById('materialTypeSelect');
+                    const thicknessEl = document.getElementById('thicknessSelect');
+                    const gradeEl = document.getElementById('gradeSelect');
+                    const finishEl = document.getElementById('finishSelect');
+                    
+                    window.__lastUploadParams = { 
+                        single: true, 
+                        fileName: file.name, 
+                        materialType: materialTypeEl ? materialTypeEl.value : '', 
+                        thickness: thicknessEl ? thicknessEl.value : '', 
+                        grade: gradeEl ? gradeEl.value : '', 
+                        finish: finishEl ? finishEl.value : '' 
+                    };
+                }
+                
+                // Show error message
+                showError('Failed to recalculate costs. Using local updates. ' + error.message);
+            }
         }
 
         // Update part cards with material information after material selection
@@ -5006,12 +5344,32 @@
                     const partNumber = parseInt(partCard.getAttribute('data-part'));
                     if (isNaN(partNumber)) return;
                     
+                    // Get material information from multiple sources
                     const label = data.part_labels && data.part_labels[partNumber] ? data.part_labels[partNumber] : {};
                     
-                    // Get material information
-                    const matText = label.material_name || '';
-                    const thText = label.thickness != null ? `${label.thickness} mm` : '';
-                    const gfText = [label.grade != null ? String(label.grade) : '', label.finish || ''].filter(Boolean).join(' / ');
+                    // Get cost data to access applied material fields
+                    const costData = (data.part_costs || []).find(pc => {
+                        const pcNum = typeof pc.part_number === 'string' ? parseInt(pc.part_number) : pc.part_number;
+                        return pcNum === partNumber;
+                    });
+                    
+                    // Use applied material fields if available (from cost_data or part label)
+                    const appliedMaterial = costData && costData.cost_data ? {
+                        material_name: costData.cost_data.applied_material_name || costData.applied_material_name || label.material_name || '',
+                        thickness: costData.cost_data.applied_thickness !== undefined ? costData.cost_data.applied_thickness : (costData.applied_thickness !== undefined ? costData.applied_thickness : label.thickness),
+                        grade: costData.cost_data.applied_grade !== undefined ? costData.cost_data.applied_grade : (costData.applied_grade !== undefined ? costData.applied_grade : label.grade),
+                        finish: costData.cost_data.applied_finish || costData.applied_finish || label.finish || ''
+                    } : {
+                        material_name: label.material_name || '',
+                        thickness: label.thickness,
+                        grade: label.grade,
+                        finish: label.finish || ''
+                    };
+                    
+                    // Get material information for display
+                    const matText = appliedMaterial.material_name || '';
+                    const thText = appliedMaterial.thickness != null ? `${appliedMaterial.thickness} mm` : '';
+                    const gfText = [appliedMaterial.grade != null ? String(appliedMaterial.grade) : '', appliedMaterial.finish || ''].filter(Boolean).join(' / ');
                     
                     // Find the part-stats section in this card
                     const partStats = partCard.querySelector('.part-stats');
@@ -5023,24 +5381,76 @@
                     if (existingExtracted) existingExtracted.remove();
                     if (existingParsed) existingParsed.remove();
                     
+                    // Also try to find and update existing parsed info by checking for "Parsed" label
+                    const allAreaInfos = partStats.querySelectorAll('.area-info');
+                    allAreaInfos.forEach(info => {
+                        const labelEl = info.querySelector('.area-label');
+                        if (labelEl && labelEl.textContent.trim() === 'Parsed') {
+                            info.remove();
+                        }
+                    });
+                    
                     // Add new material information sections
                     if (matText || thText || gfText) {
                         const materialInfo = document.createElement('div');
-                        materialInfo.className = 'material-parsed-info';
+                        materialInfo.className = 'area-info';
                         materialInfo.style.marginTop = '4px';
                         materialInfo.innerHTML = `
-                            <div class="area-info" style="margin-top:4px;">
-                                <div class="area-number" style="font-size:0.9em;">${[matText, thText, gfText].filter(Boolean).join(' · ')}</div>
-                                <div class="area-label">Parsed</div>
-                            </div>
+                            <div class="area-number" style="font-size:0.9em;">${[matText, thText, gfText].filter(Boolean).join(' · ')}</div>
+                            <div class="area-label">Parsed</div>
                         `;
                         
-                        // Insert after the L x W info
-                        const lxwInfo = partStats.querySelector('.area-info:last-of-type');
-                        if (lxwInfo) {
-                            lxwInfo.insertAdjacentElement('afterend', materialInfo);
+                        // Insert after the L x W info (find the last area-info before bending-info if exists)
+                        const lxwInfos = partStats.querySelectorAll('.area-info');
+                        let insertAfter = null;
+                        for (let i = lxwInfos.length - 1; i >= 0; i--) {
+                            const labelEl = lxwInfos[i].querySelector('.area-label');
+                            if (labelEl && labelEl.textContent.trim() === 'L × W') {
+                                insertAfter = lxwInfos[i];
+                                break;
+                            }
+                        }
+                        
+                        if (insertAfter) {
+                            insertAfter.insertAdjacentElement('afterend', materialInfo);
+                        } else if (lxwInfos.length > 0) {
+                            // Insert after last area-info
+                            lxwInfos[lxwInfos.length - 1].insertAdjacentElement('afterend', materialInfo);
                         } else {
                             partStats.appendChild(materialInfo);
+                        }
+                    }
+                    
+                    // Update dimensions if available in cost_data
+                    if (costData && costData.cost_data) {
+                        const L = costData.cost_data.length_mm;
+                        const W = costData.cost_data.width_mm;
+                        if (L != null && W != null) {
+                            const lxwInfo = partStats.querySelector('.area-info');
+                            if (lxwInfo) {
+                                const labelEl = lxwInfo.querySelector('.area-label');
+                                if (labelEl && labelEl.textContent.trim() === 'L × W') {
+                                    const numberEl = lxwInfo.querySelector('.area-number');
+                                    if (numberEl) {
+                                        numberEl.textContent = `${L.toFixed(1)} × ${W.toFixed(1)} mm`;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Update area if available
+                        if (costData.cost_data.area_sq_mm != null) {
+                            const areaInfo = partStats.querySelector('.area-info');
+                            if (areaInfo) {
+                                const labelEl = areaInfo.querySelector('.area-label');
+                                if (labelEl && labelEl.textContent.trim() === 'Area (million sq units)') {
+                                    const numberEl = areaInfo.querySelector('.area-number');
+                                    if (numberEl) {
+                                        const areaMillion = costData.cost_data.area_sq_mm / 1000000;
+                                        numberEl.textContent = areaMillion.toFixed(2);
+                                    }
+                                }
+                            }
                         }
                     }
                 });
@@ -5129,6 +5539,15 @@
                     const partNumber = parseInt(card.getAttribute('data-part'));
                     if (!isNaN(partNumber)) {
                         updateCostForPart(partNumber);
+                        
+                        // Also refresh the cost breakdown if cost data exists
+                        const costData = (window.currentData.part_costs || []).find(pc => {
+                            const pcNum = typeof pc.part_number === 'string' ? parseInt(pc.part_number) : pc.part_number;
+                            return pcNum === partNumber;
+                        });
+                        if (costData) {
+                            renderCostBreakdownForPart(partNumber, costData);
+                        }
                     }
                 });
                 
@@ -5358,9 +5777,19 @@
                 const qty = parseInt(qtyInput && (qtyInput.value || qtyInput.placeholder) || '1') || 1;
                 const unitCostSpan = partCard.querySelector('.unit-cost');
                 const totalCostSpan = partCard.querySelector('.total-cost');
-                const costData = (window.currentData.part_costs || []).find(pc => pc.part_number === parseInt(partNumber));
+                
+                // Match cost data by part number (handle both string and number)
+                const costData = (window.currentData.part_costs || []).find(pc => {
+                    const pcNum = typeof pc.part_number === 'string' ? parseInt(pc.part_number) : pc.part_number;
+                    const partNum = typeof partNumber === 'string' ? parseInt(partNumber) : partNumber;
+                    return pcNum === partNum;
+                });
+                
+                // Check if we should show costs (only after Calculate Quote is clicked)
+                const shouldShowCosts = window.__quoteCalculated === true;
+                
                 if (costData && costData.cost_data && typeof costData.cost_data.total_cost === 'number') {
-                    const unitCost = costData.cost_data.total_cost;
+                    const unitCost = shouldShowCosts ? costData.cost_data.total_cost : 0;
                     const totalCost = unitCost * qty;
                     if (unitCostSpan) {
                         unitCostSpan.textContent = `Unit: $${unitCost.toFixed(2)}`;
@@ -5378,6 +5807,13 @@
                             totalCostSpan.classList.remove('deleted');
                         }
                     }
+                } else {
+                    // Debug: Log when cost data is not found
+                    console.warn(`updateCostForPart: No cost data found for part ${partNumber}`, {
+                        costData: costData,
+                        part_costs: window.currentData.part_costs,
+                        currentData: window.currentData
+                    });
                 }
             }
         }
@@ -7175,6 +7611,10 @@
                     if (calcBtn2) { calcBtn2.disabled = false; calcBtn2.innerHTML = '⚡ CALCULATE QUOTE'; }
                     return;
                 }
+                
+                // Set flag to indicate quote has been calculated - costs should now be shown
+                window.__quoteCalculated = true;
+                
                 showResults(data);
                 const successMessage = document.getElementById('successMessage');
                 if (successMessage) {

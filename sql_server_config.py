@@ -406,7 +406,7 @@ def search_customers(company_name_pattern):
         secondary_name_columns = []
         
         # Priority order for company name fields
-        priority_keywords = ['filename', 'file_name', 'companyname', 'arabic_name']
+        priority_keywords = ['filename', 'file_name', 'company', 'arabic_name']
         secondary_keywords = ['abrv', 'description']
         
         for col_name, col_type in columns:

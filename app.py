@@ -784,16 +784,19 @@ def count_bending_lines(part_entities, layers):
             'BEND' in layer_upper
         )
         
-        # For bending lines, we only check the layer name, not the color
-        # This allows for BYLAYER color inheritance
-        if is_bending_layer:
+        # Check for red lines (color 1) - these are typically bending lines
+        is_red_line = (color == 1 and entity_type in ['LINE', 'LWPOLYLINE', 'POLYLINE'])
+        
+        # Bending line detected if either on BENDING layer OR is a red line
+        if is_bending_layer or is_red_line:
             # Count individual line segments within the entity
             line_segments = 0
             
             if entity_type == 'LINE':
                 # Single line entity = 1 line segment
                 line_segments = 1
-                print(f"  ✓ BENDING LINE entity found: 1 line segment")
+                source = "BENDING layer" if is_bending_layer else "RED line (color 1)"
+                print(f"  ✓ {source} LINE entity found: 1 line segment")
                 
             elif entity_type == 'LWPOLYLINE':
                 # Polyline entity - count the number of line segments
@@ -801,7 +804,8 @@ def count_bending_lines(part_entities, layers):
                     points = list(entity.get_points())
                     if len(points) > 1:
                         line_segments = len(points) - 1  # Number of line segments
-                        print(f"  ✓ BENDING LWPOLYLINE found: {line_segments} line segments")
+                        source = "BENDING layer" if is_bending_layer else "RED line (color 1)"
+                        print(f"  ✓ {source} LWPOLYLINE found: {line_segments} line segments")
                     else:
                         line_segments = 1
                         print(f"  ✓ BENDING LWPOLYLINE found: 1 line segment (single point)")
@@ -1787,9 +1791,15 @@ def filter_entities(msp, layers):
         color = get_entity_color(entity, layers)
         entity_type = entity.dxftype()
         
-        # Rule 1: Remove red lines (DIMENSION layer - color 1)
-        if color == 1:
+        # Rule 1: Remove ONLY dimension and text entities with red color
+        # RED LINES (color 1) ARE BENDING LINES - DON'T REMOVE THEM!
+        if color == 1 and entity_type in ['DIMENSION', 'TEXT', 'MTEXT']:
             removed_count += 1
+            continue
+        
+        # Rule 1b: Keep red lines (color 1) - these are typically bending lines
+        if color == 1 and entity_type in ['LINE', 'LWPOLYLINE', 'POLYLINE', 'ARC']:
+            filtered_entities.append(entity)
             continue
             
         # Rule 2: Remove white "SECTIONS" layer
@@ -2578,8 +2588,10 @@ def create_dxf_visualization(entities, layers, title="Filtered DXF", parts=None,
                 # Determine line color - prioritize part color over layer color
                 if layer_name.upper() == 'V-GROOVE' and color == 3:
                     line_color = 'green'  # Keep V-GROOVE green
-                elif layer_name.upper() == 'BENDING':
+                elif layer_name.upper() == 'BENDING' or 'BENDING' in layer_name.upper():
                     line_color = 'blue'  # Keep BENDING blue regardless of color
+                elif color == 1 and entity.dxftype() in ['LINE', 'LWPOLYLINE', 'POLYLINE', 'ARC']:
+                    line_color = 'red'  # Show red lines (bending lines) in red
                 elif entity.dxftype() == 'CIRCLE':
                     # Circles get a special color to make them stand out
                     line_color = 'red' if part_color == 'white' else part_color
