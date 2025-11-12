@@ -1317,6 +1317,7 @@ def find_connected_parts(entities, layers=None):
         used_ellipses = set()
         used_splines = set()
         used_vgrooves = set()
+        used_bending = set()
         used_others = set()
         
         # For each frame part, find all entities contained within it
@@ -1361,6 +1362,15 @@ def find_connected_parts(entities, layers=None):
                 if is_entity_contained_in_part_robust(vgroove, frame_part, frame_polygon):
                     combined_part.append(vgroove)
                     used_vgrooves.add(i)
+            
+            # Find BENDING entities contained within this frame part
+            for i, bending in enumerate(bending_entities):
+                if i in used_bending:
+                    continue
+                
+                if is_entity_contained_in_part_robust(bending, frame_part, frame_polygon):
+                    combined_part.append(bending)
+                    used_bending.add(i)
             
             # Find other entities contained within this frame part
             for i, other in enumerate(other_entities):
@@ -1414,6 +1424,16 @@ def find_connected_parts(entities, layers=None):
                 if closest_part_idx is not None:
                     final_parts[closest_part_idx].append(vgroove)
                     used_vgrooves.add(i)
+            
+            # For any remaining BENDING entities, find the closest frame part
+            for i, bending in enumerate(bending_entities):
+                if i in used_bending:
+                    continue
+                
+                closest_part_idx = find_closest_part(bending, final_parts)
+                if closest_part_idx is not None:
+                    final_parts[closest_part_idx].append(bending)
+                    used_bending.add(i)
         
         # Step 4: Special handling for cases with many individual entities (like Pattern.dxf)
         if len(frame_parts) == 0 and (len(arc_entities) > 100 or len(line_entities) > 100):
@@ -1449,6 +1469,10 @@ def find_connected_parts(entities, layers=None):
                 if i not in used_vgrooves:
                     final_parts.append([vgroove])
             
+            for i, bending in enumerate(bending_entities):
+                if i not in used_bending:
+                    final_parts.append([bending])
+            
             for i, other in enumerate(other_entities):
                 if i not in used_others:
                     final_parts.append([other])
@@ -1457,6 +1481,11 @@ def find_connected_parts(entities, layers=None):
             for i, vgroove in enumerate(vgroove_entities):
                 if i not in used_vgrooves:
                     final_parts.append([vgroove])
+            
+            # Step 4b: Handle standalone BENDING parts (not contained in any frame part)
+            for i, bending in enumerate(bending_entities):
+                if i not in used_bending:
+                    final_parts.append([bending])
             
             # Step 5: Handle standalone circles (not contained in any frame part)
             for i, circle in enumerate(circle_entities):
@@ -1537,7 +1566,8 @@ def find_connected_parts(entities, layers=None):
             ellipse_count = sum(1 for e in part if e.dxftype() == 'ELLIPSE')
             spline_count = sum(1 for e in part if e.dxftype() == 'SPLINE')
             vgroove_count = sum(1 for e in part if hasattr(e, 'dxf') and getattr(e.dxf, 'layer', '').upper() == 'V-GROOVE')
-            print(f"Part {i}: {len(part)} entities (Layer0: {layer0_count}, Circles: {circle_count}, Ellipses: {ellipse_count}, Splines: {spline_count}, V-GROOVE: {vgroove_count})")
+            bending_count = sum(1 for e in part if hasattr(e, 'dxf') and 'BEND' in getattr(e.dxf, 'layer', '').upper())
+            print(f"Part {i}: {len(part)} entities (Layer0: {layer0_count}, Circles: {circle_count}, Ellipses: {ellipse_count}, Splines: {spline_count}, V-GROOVE: {vgroove_count}, BENDING: {bending_count})")
         print(f"=== END FINAL GROUPING DEBUG ===")
         
         return final_parts
@@ -3959,6 +3989,7 @@ def merge_contained_parts(parts, layers):
         # Separate parts by type for analysis
         layer0_parts = []
         vgroove_parts = []
+        bending_parts = []  # NEW: collect pure BENDING-only parts
         mixed_parts = []
         other_parts = []
         
@@ -3966,6 +3997,7 @@ def merge_contained_parts(parts, layers):
             # Analyze the part to determine its type
             layer0_count = 0
             vgroove_count = 0
+            bending_only_count = 0
             other_count = 0
             
             for entity in part:
@@ -3980,15 +4012,23 @@ def merge_contained_parts(parts, layers):
                     layer0_count += 1
                 elif layer_name.upper() == 'V-GROOVE' and color == 3:
                     vgroove_count += 1
+                elif (
+                    # Treat any layer name that clearly indicates bending as bending-only
+                    ('BENDING' in layer_name.upper()) or
+                    ('BEND' in layer_name.upper())
+                ):
+                    bending_only_count += 1
                 else:
                     other_count += 1
             
             # Categorize the part
-            if layer0_count > 0 and vgroove_count == 0 and other_count == 0:
+            if layer0_count > 0 and vgroove_count == 0 and bending_only_count == 0 and other_count == 0:
                 layer0_parts.append(part)
-            elif vgroove_count > 0 and layer0_count == 0 and other_count == 0:
+            elif vgroove_count > 0 and layer0_count == 0 and bending_only_count == 0 and other_count == 0:
                 vgroove_parts.append(part)
-            elif layer0_count > 0 and vgroove_count > 0:
+            elif bending_only_count > 0 and layer0_count == 0 and vgroove_count == 0 and other_count == 0:
+                bending_parts.append(part)
+            elif layer0_count > 0 and (vgroove_count > 0 or bending_only_count > 0):
                 mixed_parts.append(part)
             else:
                 other_parts.append(part)
@@ -4054,6 +4094,27 @@ def merge_contained_parts(parts, layers):
                         print(f"  - merged V-GROOVE part #{j+1} into parent #{i+1}")
                     except Exception:
                         pass
+
+            # And check if any BENDING parts are contained within this Layer 0 part
+            for j, bending_part in enumerate(bending_parts):
+                if j in used_indices:
+                    continue
+
+                contained_b = False
+                try:
+                    if outer_poly is not None:
+                        if is_part_contained(bending_part, part1) or _part_inside_inclusion(bending_part, outer_poly, corridors):
+                            contained_b = True
+                except Exception:
+                    contained_b = is_part_contained(bending_part, part1)
+
+                if contained_b:
+                    merged_entities.extend(bending_part)
+                    used_indices.add(j)
+                    try:
+                        print(f"  - merged BENDING part #{j+1} into parent #{i+1}")
+                    except Exception:
+                        pass
             
             merged_parts.append(merged_entities)
             used_indices.add(i)
@@ -4062,6 +4123,11 @@ def merge_contained_parts(parts, layers):
         for i, vgroove_part in enumerate(vgroove_parts):
             if i not in used_indices:
                 merged_parts.append(vgroove_part)
+
+        # Add remaining BENDING parts that weren't contained
+        for i, bending_part in enumerate(bending_parts):
+            if i not in used_indices:
+                merged_parts.append(bending_part)
         
         # Add mixed parts
         merged_parts.extend(mixed_parts)
@@ -6231,6 +6297,242 @@ def get_material_config_route():
         return jsonify(config)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/recalculate-part-costs', methods=['POST'])
+def recalculate_part_costs():
+    """Recalculate costs for parts with updated material information"""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided', 'success': False}), 400
+        
+        # Extract data from request
+        part_costs = data.get('part_costs', [])
+        part_images = data.get('part_images', [])
+        part_labels = data.get('part_labels', {})
+        scrap_factor = float(data.get('scrap_factor', 1.20))
+        admin_config = data.get('admin_config', {})
+        
+        if not part_costs:
+            return jsonify({'error': 'No part costs provided', 'success': False}), 400
+        
+        if not part_labels:
+            return jsonify({'error': 'No part labels provided', 'success': False}), 400
+        
+        print(f"Recalculating costs for {len(part_labels)} parts...")
+        
+        # Load admin configuration
+        loaded_admin_config = load_admin_config()
+        laser_cost = admin_config.get('laser_cost', loaded_admin_config.get('laser_cost', 1.50))
+        piercing_toggle = loaded_admin_config.get('piercing_toggle', False)
+        
+        # Recalculate costs for each part with updated material information
+        updated_part_costs = []
+        
+        for part_cost_entry in part_costs:
+            part_number = part_cost_entry.get('part_number')
+            
+            # Check if this part has updated material information
+            part_label = part_labels.get(str(part_number))
+            
+            if not part_label:
+                # No updated info, keep existing cost data
+                updated_part_costs.append(part_cost_entry)
+                continue
+            
+            # Get material parameters from part label
+            material_name = part_label.get('material_name', '')
+            thickness = part_label.get('thickness')
+            grade = part_label.get('grade')
+            finish = part_label.get('finish', '')
+            
+            # Validate required fields
+            if not material_name or thickness is None:
+                print(f"Part {part_number}: Missing material or thickness, keeping existing data")
+                updated_part_costs.append(part_cost_entry)
+                continue
+            
+            try:
+                thickness_mm = float(thickness)
+            except (ValueError, TypeError):
+                print(f"Part {part_number}: Invalid thickness '{thickness}', keeping existing data")
+                updated_part_costs.append(part_cost_entry)
+                continue
+            
+            # Get material configuration from database
+            try:
+                material_config = get_material_config(material_name, thickness_mm, grade, finish)
+            except Exception as e:
+                print(f"Part {part_number}: Error getting material config: {e}")
+                # Keep existing cost data but mark with error
+                part_cost_entry['calculation_error'] = f"Material configuration not found: {material_name} / {thickness_mm}mm / Grade {grade} / {finish}"
+                updated_part_costs.append(part_cost_entry)
+                continue
+            
+            if not material_config:
+                print(f"Part {part_number}: Material config not found in database")
+                # Keep existing cost data but mark with error
+                part_cost_entry['calculation_error'] = f"Material combination not found in database: {material_name} / {thickness_mm}mm / Grade {grade} / {finish}"
+                updated_part_costs.append(part_cost_entry)
+                continue
+            
+            # Merge with admin config
+            material_config['laser_cost'] = laser_cost
+            material_config['piercing_toggle'] = piercing_toggle
+            material_config['scrap_factor'] = scrap_factor
+            
+            # Extract existing geometric data
+            existing_cost_data = part_cost_entry.get('cost_data', {})
+            area = part_cost_entry.get('area', 0)
+            length_mm = part_cost_entry.get('length_mm', 0)
+            width_mm = part_cost_entry.get('width_mm', 0)
+            object_parts_count = part_cost_entry.get('object_parts_count', 1)
+            punch_count = existing_cost_data.get('punch_count', 0)
+            
+            print(f"Part {part_number}: Recalculating with {material_name} / {thickness_mm}mm / Grade {grade} / {finish}")
+            
+            # Recalculate cost with updated material config but existing geometric data
+            # We need to manually recalculate since we don't have access to part_entities
+            try:
+                area_sq_mm = area * 1000000
+                
+                # Get perimeter from existing cost data if available
+                perimeter_meters = existing_cost_data.get('perimeter_meters', 0)
+                
+                # If no perimeter, estimate from dimensions
+                if perimeter_meters == 0 and length_mm > 0 and width_mm > 0:
+                    perimeter_mm = 2 * (length_mm + width_mm)
+                    perimeter_meters = perimeter_mm / 1000.0
+                
+                # Calculate cutting time components
+                machine_speed_m_per_min = material_config.get('machine_speed', 100.0)
+                vaporization_speed_m_per_min = material_config.get('vaporization_speed', 50.0)
+                
+                if machine_speed_m_per_min <= 0:
+                    machine_speed_m_per_min = 100.0
+                if vaporization_speed_m_per_min <= 0:
+                    vaporization_speed_m_per_min = 50.0
+                
+                cutting_time_machine = perimeter_meters / machine_speed_m_per_min
+                cutting_time_vaporization = perimeter_meters / vaporization_speed_m_per_min
+                
+                # Piercing time
+                base_piercing_time = material_config['piercing_time']
+                if not material_config.get('piercing_toggle', False):
+                    adjusted_piercing_time = max(0, base_piercing_time - 1)
+                else:
+                    adjusted_piercing_time = base_piercing_time
+                
+                piercing_time_total = object_parts_count * (adjusted_piercing_time / 60)
+                
+                # Total time
+                total_time_min = cutting_time_machine + cutting_time_vaporization + piercing_time_total
+                
+                # Laser cost
+                laser_cost_total = total_time_min * material_config['laser_cost']
+                
+                # Material cost calculation
+                density = material_config.get('density', 7.85)
+                price_per_kg = material_config.get('price_per_kg', 25.0)
+                
+                # Weight calculation: Area(m²) * Thickness(mm) * Density(g/cm³) / 1000 = kg
+                weight_kg = area * thickness_mm * density / 1000.0
+                
+                # Material cost with scrap factor
+                material_cost = weight_kg * price_per_kg * scrap_factor
+                
+                # V-groove and bending (keep from existing if available)
+                vgroove_count = existing_cost_data.get('vgroove_count', 0)
+                vgroove_length_meters = existing_cost_data.get('vgroove_length_meters', 0.0)
+                vgroove_price = material_config.get('vgroove_price', 0.0)
+                vgroove_cost = vgroove_count * vgroove_price + (vgroove_length_meters * vgroove_price)
+                
+                bending_count = existing_cost_data.get('bending_count', 0)
+                total_bending_lines = existing_cost_data.get('total_bending_lines', 0)
+                bending_price = material_config.get('bending_price', 0.0)
+                bending_cost = total_bending_lines * bending_price
+                
+                # Punch cost
+                punch_price = material_config.get('punch_price', 0.0)
+                punch_cost = punch_count * punch_price
+                
+                # Total cost
+                total_cost = laser_cost_total + material_cost + vgroove_cost + bending_cost + punch_cost
+                
+                # Create updated cost data
+                updated_cost_data = {
+                    'area_sq_mm': area_sq_mm,
+                    'length_mm': length_mm,
+                    'width_mm': width_mm,
+                    'perimeter_meters': perimeter_meters,
+                    'cutting_time_machine': cutting_time_machine,
+                    'cutting_time_vaporization': cutting_time_vaporization,
+                    'piercing_time_total': piercing_time_total,
+                    'total_time_min': total_time_min,
+                    'object_parts_count': object_parts_count,
+                    'laser_cost': laser_cost_total,
+                    'weight_kg': weight_kg,
+                    'material_cost': material_cost,
+                    'vgroove_count': vgroove_count,
+                    'bending_count': bending_count,
+                    'total_bending_lines': total_bending_lines,
+                    'bending_cost': bending_cost,
+                    'vgroove_length_meters': vgroove_length_meters,
+                    'vgroove_cost': vgroove_cost,
+                    'punch_count': punch_count,
+                    'punch_cost': punch_cost,
+                    'total_cost': total_cost,
+                    'applied_material_name': material_name,
+                    'applied_thickness': thickness_mm,
+                    'applied_grade': grade,
+                    'applied_finish': finish
+                }
+                
+                # Update part cost entry
+                updated_part_cost = {
+                    'part_number': part_number,
+                    'area': area,
+                    'length_mm': length_mm,
+                    'width_mm': width_mm,
+                    'object_parts_count': object_parts_count,
+                    'cost_data': updated_cost_data,
+                    'extracted_label': part_cost_entry.get('extracted_label'),
+                    'applied_material_name': material_name,
+                    'applied_thickness': thickness_mm,
+                    'applied_grade': grade,
+                    'applied_finish': finish
+                }
+                
+                updated_part_costs.append(updated_part_cost)
+                print(f"Part {part_number}: Recalculated successfully - Total Cost: ${total_cost:.2f}")
+                
+            except Exception as calc_error:
+                print(f"Part {part_number}: Error during recalculation: {calc_error}")
+                import traceback
+                traceback.print_exc()
+                # Keep existing data with error
+                part_cost_entry['calculation_error'] = f"Calculation error: {str(calc_error)}"
+                updated_part_costs.append(part_cost_entry)
+        
+        print(f"Recalculation complete. Updated {len(updated_part_costs)} parts.")
+        
+        # Return updated data
+        return jsonify({
+            'success': True,
+            'part_costs': updated_part_costs,
+            'part_images': part_images,
+            'part_labels': part_labels
+        })
+        
+    except Exception as e:
+        print(f"Error in recalculate_part_costs endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': str(e),
+            'success': False
+        }), 500
 
 @app.route('/admin/materials')
 def admin_materials():

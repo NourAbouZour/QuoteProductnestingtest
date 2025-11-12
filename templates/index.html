@@ -4335,7 +4335,7 @@
                     const editing = tr.classList.toggle('editing');
                     if (editing) {
                         btn.textContent = '💾';
-                        makeEditable(tr, /*allowDensity*/ false);
+                        makeEditable(tr, /*allowDensity*/ true);
                     } else {
                         btn.textContent = '🖊️';
                         const values = readEditedValues(tr);
