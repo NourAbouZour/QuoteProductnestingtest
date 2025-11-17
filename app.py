@@ -774,29 +774,19 @@ def count_bending_lines(part_entities, layers):
         
         print(f"Entity {i}: Type={entity_type}, Layer='{layer_name}', Color={color}")
         
-        # Check for BENDING entities with multiple variations
+        # Check for BENDING entities strictly by layer name
         layer_upper = layer_name.upper()
-        is_bending_layer = (
-            layer_upper == 'BENDING' or 
-            layer_upper == 'BEND' or 
-            layer_upper == 'BEND_LINES' or
-            'BENDING' in layer_upper or
-            'BEND' in layer_upper
-        )
+        is_bending_layer = (layer_upper == 'BENDING')
         
-        # Check for red lines (color 1) - these are typically bending lines
-        is_red_line = (color == 1 and entity_type in ['LINE', 'LWPOLYLINE', 'POLYLINE'])
-        
-        # Bending line detected if either on BENDING layer OR is a red line
-        if is_bending_layer or is_red_line:
+        # Only count bending if the layer is exactly 'BENDING'
+        if is_bending_layer:
             # Count individual line segments within the entity
             line_segments = 0
             
             if entity_type == 'LINE':
                 # Single line entity = 1 line segment
                 line_segments = 1
-                source = "BENDING layer" if is_bending_layer else "RED line (color 1)"
-                print(f"  ✓ {source} LINE entity found: 1 line segment")
+                print(f"  ✓ BENDING LINE entity found: 1 line segment")
                 
             elif entity_type == 'LWPOLYLINE':
                 # Polyline entity - count the number of line segments
@@ -804,8 +794,7 @@ def count_bending_lines(part_entities, layers):
                     points = list(entity.get_points())
                     if len(points) > 1:
                         line_segments = len(points) - 1  # Number of line segments
-                        source = "BENDING layer" if is_bending_layer else "RED line (color 1)"
-                        print(f"  ✓ {source} LWPOLYLINE found: {line_segments} line segments")
+                        print(f"  ✓ BENDING LWPOLYLINE found: {line_segments} line segments")
                     else:
                         line_segments = 1
                         print(f"  ✓ BENDING LWPOLYLINE found: 1 line segment (single point)")
@@ -828,15 +817,15 @@ def count_bending_lines(part_entities, layers):
                     line_segments = 1
                     
             else:
-                # Other entity types - count as 1 line segment
-                line_segments = 1
-                print(f"  ✓ BENDING {entity_type} found: 1 line segment")
+                # Ignore non-line entities for bending
+                print(f"  - Ignored non-line entity on BENDING layer: {entity_type}")
+                line_segments = 0
             
             bending_count += line_segments
             print(f"  Total BENDING line segments so far: {bending_count}")
             
         elif is_bending_layer:
-            print(f"  - BENDING layer entity found")
+            print(f"  - BENDING layer entity found (no countable segments)")
     
     print(f"=== FINAL BENDING COUNT: {bending_count} ===\n")
     return bending_count
@@ -1184,8 +1173,8 @@ def find_connected_parts(entities, layers=None):
                 vgroove_entities.append(entity)
             elif layer_name.upper() == 'BENDING':
                 bending_entities.append(entity)
-            elif layer_name.upper() == 'PUNCH' and entity_type == 'CIRCLE':
-                # PUNCH layer circles for punching operations
+            elif layer_name.upper() in ('PUNCH', 'PUNCHING') and entity_type in ('CIRCLE', 'ELLIPSE'):
+                # PUNCH/PUNCHING layer circles or ellipses for punching operations
                 punch_entities.append(entity)
             elif layer_name == '0' and color == 7:
                 layer0_entities.append(entity)
@@ -3081,16 +3070,37 @@ def _collect_text_entities(msp):
 
 
 def _qty_from_text(s):
-    """Parse integer quantity from text like 'Qty: 180', 'QTY: 1', etc."""
+    """Parse integer quantity from label-like text near a part.
+    Supports common formats and avoids ambiguous dimension patterns.
+    Examples:
+      - 'Qty: 180', 'QTY 1', 'quantity-3', 'q=4'
+      - '5 pcs', 'pcs: 12', 'NO. 7', 'nos 2'
+    Explicitly avoids plain 'x' dimension patterns (e.g., '100 x 50').
+    """
     if not s:
         return None
-    # Look for "Qty:" followed by a number
-    m = re.search(r"(?i)\bqty\s*:\s*(\d+)", s)
-    if m:
-        try:
-            return int(m.group(1))
-        except Exception:
-            return None
+    text = str(s).strip()
+    # Fast-fail: ignore lines that look like dimensions (contain mm or multiple 'x' numbers)
+    upper = text.upper()
+    if 'MM' in upper:
+        # Often dimensions like '100mm' or '100 x 50mm'
+        pass  # do not early return; the line may still include qty text too
+    # Robust, case-insensitive patterns for quantities
+    patterns = [
+        r"(?i)\bq(?:ty|uantity)?\s*[:=\-]?\s*(\d+)\b",              # qty: 3, q 3, quantity-4
+        r"(?i)\b(?:no\.?|nos\.?|units?|pcs|pieces?)\s*[:=\-]?\s*(\d+)\b",  # pcs: 5, no. 2
+        r"(?i)\b(\d+)\s*(?:pcs|pieces?|units?|nos?\.?)\b",          # 5 pcs, 3 units, 2 no
+        # Conservatively allow number in parens if clearly labeled
+        r"(?i)\bq(?:ty|uantity)?\b.*?\((\d+)\)",                    # Qty (3)
+        r"(?i)\b(?:pcs|pieces?|units?|nos?\.?)\b.*?\((\d+)\)",      # pcs (3)
+    ]
+    for pat in patterns:
+        m = re.search(pat, text, flags=re.IGNORECASE)
+        if m:
+            try:
+                return int(m.group(1))
+            except Exception:
+                continue
     return None
 
 
@@ -3338,16 +3348,16 @@ def extract_labels_for_parts(doc, msp, parts):
         # For small parts, use absolute minimum distances; for large parts, use relative distances
         
         # Calculate adaptive search parameters with more generous minimums for small parts
-        min_search_width = max(100.0, part_width * 1.0)  # At least 100mm or 100% of part width
-        min_search_height = max(80.0, part_height * 4.0)  # At least 80mm or 4x part height
+        min_search_width = max(200.0, part_width * 1.5)  # Increased: At least 200mm or 150% of part width
+        min_search_height = max(150.0, part_height * 6.0)  # Increased: At least 150mm or 6x part height
         
         # Use the larger of relative or absolute distances
-        search_width = max(part_width * 4.0, min_search_width)
-        search_height = max(part_height * 12.0, min_search_height)
+        search_width = max(part_width * 5.0, min_search_width)  # Increased multiplier
+        search_height = max(part_height * 15.0, min_search_height)  # Increased multiplier
         
         search_left = px1 - search_width
         search_right = px2 + search_width
-        search_top = py1 + min(part_height * 0.5, 30.0)  # Allow text slightly above, but cap at 30mm
+        search_top = py1 + min(part_height * 1.0, 50.0)  # Increased: Allow text more above, cap at 50mm
         search_bottom = py1 - search_height
         
         # Debug logging for search area
@@ -3393,14 +3403,50 @@ def extract_labels_for_parts(doc, msp, parts):
             continue
 
         # Step 2: Sort by proximity and find the best label block
-        region_texts.sort(key=lambda x: x[0])
-        print(f"\nSorted text entities by score:")
-        for i, (score, t) in enumerate(region_texts[:5]):  # Show top 5
-            print(f"  {i+1}. Score {score:.3f}: '{t['text']}' at ({t['x']:.2f}, {t['y']:.2f})")
+        # First, score all texts for material-like content
+        def _quick_material_score(txt):
+            """Quick check if text looks like material info."""
+            try:
+                u = str(txt or '').upper().strip()
+                if not u:
+                    return 0
+                score = 0
+                if re.search(r"\d+\s*MM\b", u):
+                    score += 2
+                if re.search(r"(?:SS|SUS|STS)?\s*[-/]?\s*(?:316|304|310|430|201)\b", u):
+                    score += 2
+                if re.search(r"\b(BRUSH|MATT|MOTT|NO\.?\s*4|2B|BA)\b", u):
+                    score += 1
+                if re.search(r"\b(SS|SUS|STS|STAINLESS|ALU|BRASS|COPPER|STEEL|MS|GALV)\b", u):
+                    score += 1
+                # Penalize pure numbers
+                if re.fullmatch(r"[\d\.\s]+", u):
+                    score -= 3
+                return score
+            except:
+                return 0
         
-        # Step 3: Identify the primary text line (closest to part)
-        primary_line = region_texts[0][1]
+        # Re-score region_texts with combined proximity + material score
+        scored_texts = []
+        for prox_score, t in region_texts:
+            mat_score = _quick_material_score(t['text'])
+            # Combine: material score is more important, but proximity still matters
+            combined_score = prox_score - (mat_score * 0.5)  # Lower is better (like proximity)
+            scored_texts.append((combined_score, prox_score, mat_score, t))
+        
+        # Sort by combined score (lower is better)
+        scored_texts.sort(key=lambda x: x[0])
+        
+        print(f"\nSorted text entities by combined score (proximity + material):")
+        for i, (comb_score, prox_score, mat_score, t) in enumerate(scored_texts[:10]):  # Show top 10
+            print(f"  {i+1}. Combined={comb_score:.3f} (prox={prox_score:.3f}, mat={mat_score}) '{t['text']}' at ({t['x']:.2f}, {t['y']:.2f})")
+        
+        # Step 3: Identify the primary text line (best combined score)
+        primary_line = scored_texts[0][3]  # Get the text entity from best combined score
         print(f"\nPrimary line: '{primary_line['text']}' at ({primary_line['x']:.2f}, {primary_line['y']:.2f})")
+        
+        # Update region_texts to use the new ordering for companion search
+        region_texts = [(prox_score, t) for _, prox_score, _, t in scored_texts]
         
         # Step 4: Find companion lines near the primary line
         # Look for text within reasonable proximity (horizontally and vertically)
@@ -3408,8 +3454,9 @@ def extract_labels_for_parts(doc, msp, parts):
         primary_height = primary_line['height']
         
         # Use adaptive proximity thresholds that work for all text sizes
-        min_h_proximity = max(primary_height * 8.0, 20.0)  # At least 20mm or 8x text height
-        min_v_proximity = max(primary_height * 4.0, 10.0)  # At least 10mm or 4x text height
+        # Made more generous to find material text that might be slightly further
+        min_h_proximity = max(primary_height * 15.0, 50.0)  # Increased: At least 50mm or 15x text height
+        min_v_proximity = max(primary_height * 8.0, 30.0)  # Increased: At least 30mm or 8x text height
         
         print(f"Companion search thresholds: h={min_h_proximity:.2f}mm, v={min_v_proximity:.2f}mm")
         
@@ -3490,6 +3537,74 @@ def extract_labels_for_parts(doc, msp, parts):
                     print(f"  Found type text: '{line['text']}'")
                     break
         
+        # Step 6b: Robust fallback – ALWAYS scan nearby region texts for best material/type line
+        # This fixes cases where the 1–3 line grouping misses the true material line
+        def _type_line_score(txt):
+            """Heuristic score: prefer lines that look like material/grade/finish/thickness."""
+            try:
+                u = str(txt or '').upper().strip()
+            except Exception:
+                return -9999
+            if not u:
+                return -9999
+            score = 0
+            # Thickness strongly indicates a type line (fixed regex - was \\d, should be \d)
+            if re.search(r"(\d+(?:\.\d+)?)\s*MM\b", u):
+                score += 5  # Increased weight
+            # Stainless grades (304/316/...) with or without SS/SUS/STS prefix
+            if re.search(r"(?:\b(?:SS|SUS|STS)\s*[-/]?)?(316|304|310|430|201)\b", u):
+                score += 4  # Increased weight
+            # Common finishes
+            if re.search(r"\b(BRUSH\w*|MATT|MOTT|NO\.?\s*4|2B|BA)\b", u):
+                score += 3  # Increased weight
+            # Material keywords
+            if re.search(r"\b(STAINLESS|SS\b|SUS\b|STS\b|ALU(?:MIN(?:IUM)?)?\b|\bAL\b|BRASS\b|COPPER\b|MILD\s+STEEL\b|\bMS\b|\bSTEEL\b|GALV)\b", u):
+                score += 3  # Increased weight
+            # Penalize pure numbers / dimension-like lines
+            if re.fullmatch(r"[\d\.\s]+", u):
+                score -= 5
+            if re.search(r"\b\d+\s*[X×]\s*\d+\b", u):
+                score -= 5
+            if re.search(r"\bDIM\b|\bR\d+\b", u):
+                score -= 2
+            return score
+        
+        # ALWAYS use scoring to find the best type line, even if we already have one
+        # This ensures we pick the best material line, not just the closest one
+        top_k = min(len(region_texts), 20)  # Check more candidates
+        best_t = None
+        best_s = -9999
+        for _score, t in region_texts[:top_k]:
+            # Skip quantity lines
+            if qty_line and t is qty_line[0]:
+                continue
+            # Skip if this is already selected as type_text_line and has good content
+            if type_text_line and t is type_text_line:
+                # Re-score it to see if it's actually good
+                s = _type_line_score(t['text'])
+                if s > best_s:
+                    best_s = s
+                    best_t = t
+                continue
+            s = _type_line_score(t['text'])
+            if s > best_s:
+                best_s = s
+                best_t = t
+        
+        # Use the best-scoring line if it's better than what we have, or if we have nothing
+        if best_t is not None:
+            if type_text_line is None:
+                # No type line found yet, use the best one
+                if best_s >= 1:
+                    type_text_line = best_t
+                    print(f"  Fallback selected type text: '{best_t['text']}' (score={best_s})")
+            else:
+                # We have a type line, but check if the scored one is better
+                current_score = _type_line_score(type_text_line['text'])
+                if best_s > current_score and best_s >= 2:
+                    print(f"  Replacing type text: '{type_text_line['text']}' (score={current_score}) -> '{best_t['text']}' (score={best_s})")
+                    type_text_line = best_t
+        
         # Step 7: Fallback quantity detection
         if qty_line is None:
             print("  No quantity found in label block, searching entire region...")
@@ -3503,7 +3618,10 @@ def extract_labels_for_parts(doc, msp, parts):
         
         # Step 8: Build label bounding box
         label_bbox = None
-        for line in label_lines:
+        _bbox_lines = list(label_lines)
+        if type_text_line is not None and all(type_text_line is not l for l in _bbox_lines):
+            _bbox_lines.append(type_text_line)
+        for line in _bbox_lines:
             line_bbox = _approx_text_bbox(line['x'], line['y'], line['height'])
             label_bbox = _merge_bboxes(label_bbox, line_bbox)
         
@@ -4837,7 +4955,7 @@ def upload_file():
             except Exception as _ai_layer_err:
                 print(f"AI layer relabel fallback error: {_ai_layer_err}")
 
-            # 2) Detect missing quantities using nearest text patterns only for failed parts
+            # 2) Detect missing quantities using label-like patterns under each part (safer fallback)
             try:
                 # Collect all text entities once
                 all_text = []
@@ -4849,53 +4967,47 @@ def upload_file():
                             all_text.append({'text': ent.text or '', 'pos': (ent.dxf.insert.x, ent.dxf.insert.y)})
                     except Exception:
                         continue
-
-                qty_patterns = [
-                    r'^\s*(\d+)\s*$',
-                    r'qty\s*:?\s*(\d+)',
-                    r'quantity\s*:?\s*(\d+)',
-                    r'q\s*:?\s*(\d+)',  # Added: q:2, q 2, q2
-                    r'Q\s*:?\s*(\d+)',  # Added: Q:2, Q 2, Q2
-                    r'x\s*(\d+)',
-                    r'×\s*(\d+)',
-                    r'(\d+)\s*pcs?',
-                    r'(\d+)\s*pieces?',
-                    r'(\d+)\s*units?'
-                ]
-
-                def _try_parse_qty(text):
-                    if not text:
-                        return None
-                    import re as _re
-                    # Try case-insensitive matching for all patterns
-                    for pat in qty_patterns:
-                        m = _re.search(pat, text, _re.IGNORECASE)
-                        if m:
-                            try:
-                                return int(m.group(1) if m.groups() else m.group(0))
-                            except Exception:
-                                continue
-                    return None
+                # Helper to compute search region below part similar to extract_labels_for_parts
+                def _region_for_part(bbox):
+                    (px1, py1, px2, py2) = bbox
+                    part_w = max(1e-6, px2 - px1)
+                    part_h = max(1e-6, py2 - py1)
+                    min_search_width = max(100.0, part_w * 1.0)
+                    min_search_height = max(80.0, part_h * 4.0)
+                    search_width = max(part_w * 4.0, min_search_width)
+                    search_height = max(part_h * 12.0, min_search_height)
+                    left = px1 - search_width
+                    right = px2 + search_width
+                    top = py1 + min(part_h * 0.5, 30.0)
+                    bottom = py1 - search_height
+                    center_x = (px1 + px2) / 2.0
+                    return left, right, top, bottom, center_x, py1, part_w, part_h
 
                 for idx, part in enumerate(meaningful_parts, start=1):
                     lbl = extracted_part_labels.get(idx) or {}
                     q = lbl.get('quantity')
                     if q in (None, 0, '0', ''):
                         bbox = _compute_part_bbox(part)
-                        center = _part_center_from_bbox(bbox)
-                        best = None
-                        best_d = 1e18
+                        left, right, top, bottom, cx, py1, pw, ph = _region_for_part(bbox)
+                        best_qty = None
+                        best_score = 1e18
                         for t in all_text:
-                            qq = _try_parse_qty(t['text'])
-                            if qq is None:
+                            tx, ty = t['pos']
+                            if not (left <= tx <= right and bottom <= ty <= top):
                                 continue
-                            dx = (t['pos'][0] - center[0]); dy = (t['pos'][1] - center[1])
-                            d2 = dx*dx + dy*dy
-                            if d2 < best_d:
-                                best_d = d2
-                                best = qq
-                        if best is not None:
-                            lbl['quantity'] = int(best)
+                            qq = _qty_from_text(t['text'])
+                            if qq is None:  # Only accept label-like quantity formats
+                                continue
+                            vdist = abs(ty - py1)
+                            hdist = abs(tx - cx)
+                            vnorm = vdist / max(ph, 10.0)
+                            hnorm = hdist / max(pw, 10.0)
+                            score = vnorm + 0.4 * hnorm
+                            if score < best_score:
+                                best_score = score
+                                best_qty = qq
+                        if best_qty is not None:
+                            lbl['quantity'] = int(best_qty)
                             extracted_part_labels[idx] = lbl
             except Exception as _ai_qty_err:
                 print(f"AI quantity fallback error: {_ai_qty_err}")
@@ -4996,24 +5108,20 @@ def upload_file():
             except ValueError:
                 thickness_mm = float((inferred or {}).get('thickness') or 0)
             
-            # CRITICAL: Validate that material and thickness are provided before proceeding
+            # Soft-validate material/thickness: allow fallback to manual selection popup instead of hard error
+            material_missing = False
             if not material_name or str(material_name).strip() == '':
-                error_msg = "ERROR: No material type specified. Cannot calculate costs without material information."
-                print(f"  ❌ {error_msg}")
-                return jsonify({
-                    'error': error_msg,
-                    'message': 'Please specify a material type in the upload form or ensure it is properly labeled in the DXF file.'
-                }), 400
+                material_missing = True
+                print("  ⚠ No material provided from form or labels. Proceeding to allow manual selection.")
             
-            if thickness_mm is None or thickness_mm <= 0:
-                error_msg = "ERROR: No thickness specified or thickness is invalid. Cannot calculate costs without thickness information."
-                print(f"  ❌ {error_msg}")
-                return jsonify({
-                    'error': error_msg,
-                    'message': 'Please specify a valid thickness in the upload form or ensure it is properly labeled in the DXF file.'
-                }), 400
+            if thickness_mm is None or float(thickness_mm) <= 0:
+                print("  ⚠ No valid thickness provided. Defaulting to 0 and deferring cost calculation until selection.")
+                thickness_mm = 0.0
             
-            print(f"  ✅ Material validation passed: '{material_name}' / {thickness_mm}mm")
+            if not material_missing and thickness_mm > 0:
+                print(f"  ✅ Material validation passed: '{material_name}' / {thickness_mm}mm")
+            else:
+                print("  ⚠ Skipping global material validation; will validate per-part and prompt for manual selection if needed.")
             
             # Get dynamic material configuration
             material_config = None
@@ -5239,13 +5347,38 @@ def upload_file():
                         except Exception:
                             pass
 
-                    # Calculate punch count for this part (circles on PUNCH layer)
+                    # Calculate punch count for this part
+                    # Count entities on PUNCH/PUNCHING layers that represent holes/slots:
+                    # - CIRCLE / ELLIPSE
+                    # - LWPOLYLINE / POLYLINE that are closed (common for punched slots/holes)
                     punch_count = 0
                     for entity in part_entities:
-                        if hasattr(entity, 'dxf'):
-                            layer_name = getattr(entity.dxf, 'layer', 'UNKNOWN')
-                            entity_type = entity.dxftype()
-                            if layer_name.upper() == 'PUNCH' and entity_type == 'CIRCLE':
+                        if not hasattr(entity, 'dxf'):
+                            continue
+                        layer_name = getattr(entity.dxf, 'layer', 'UNKNOWN')
+                        layer_upper = str(layer_name).upper()
+                        if layer_upper not in ('PUNCH', 'PUNCHING'):
+                            continue
+                        try:
+                            et = entity.dxftype()
+                        except Exception:
+                            et = ''
+                        et_upper = str(et).upper()
+                        if et_upper in ('CIRCLE', 'ELLIPSE'):
+                            punch_count += 1
+                        elif et_upper == 'LWPOLYLINE':
+                            try:
+                                is_closed = bool(getattr(entity, 'closed', False))
+                            except Exception:
+                                is_closed = False
+                            if is_closed:
+                                punch_count += 1
+                        elif et_upper == 'POLYLINE':
+                            try:
+                                is_closed = bool(getattr(entity, 'is_closed', False) or getattr(entity, 'closed', False))
+                            except Exception:
+                                is_closed = False
+                            if is_closed:
                                 punch_count += 1
                     
                     print(f"  🔨 Part {part_number} punch count: {punch_count}")
@@ -5411,6 +5544,8 @@ def upload_file():
                             part_config = None
                         
                         # Apply UI overrides if available (override DB values)
+                        # CRITICAL: These overrides come from the Materials Used table edits
+                        # They MUST override database values for accurate cost calculations
                         def _mkey(name, th, gr, fi):
                             try:
                                 return "|".join([str(name or ''), str(th or ''), str(gr if gr is not None else ''), str(fi if fi is not None else '')])
@@ -5419,12 +5554,24 @@ def upload_file():
 
                         try:
                             key = _mkey(eff_material_name, eff_thickness_mm, eff_grade, eff_finish)
+                            print(f"  🔍 Looking for material override with key: '{key}'")
+                            print(f"  🔍 Available override keys: {list(material_overrides.keys()) if isinstance(material_overrides, dict) else 'N/A'}")
+                            
                             ov = material_overrides.get(key) if isinstance(material_overrides, dict) else None
                             if ov:
-                                print(f"  ✏️ Applying UI overrides for part {part_number}: {ov}")
+                                print(f"  ✏️ FOUND UI OVERRIDES for part {part_number}!")
+                                print(f"  ✏️ Override values: {ov}")
+                                print(f"  ✏️ Original DB config values:")
+                                for k in ['density', 'price_per_kg', 'scrap_price_per_kg', 'machine_speed', 
+                                         'piercing_time', 'vaporization_speed', 'vgroove_price', 'bending_price']:
+                                    orig_val = part_config.get(k) if part_config else 'N/A'
+                                    print(f"      {k}: {orig_val}")
+                                
                                 if not part_config:
                                     part_config = {}
-                                # Override specific fields if provided
+                                
+                                # Override specific fields if provided - these are the edited values from Materials table
+                                override_count = 0
                                 for k_ui, k_cfg in [
                                     ('density', 'density'),
                                     ('price_per_kg', 'price_per_kg'),
@@ -5437,11 +5584,26 @@ def upload_file():
                                 ]:
                                     try:
                                         if ov.get(k_ui) is not None:
-                                            part_config[k_cfg] = float(ov[k_ui])
-                                    except Exception:
-                                        pass
+                                            old_val = part_config.get(k_cfg, 'Not set')
+                                            new_val = float(ov[k_ui])
+                                            part_config[k_cfg] = new_val
+                                            override_count += 1
+                                            print(f"      ✅ OVERRIDDEN {k_cfg}: {old_val} -> {new_val}")
+                                    except Exception as e:
+                                        print(f"      ⚠ Failed to override {k_ui}: {e}")
+                                
+                                print(f"  ✏️ Applied {override_count} override(s). Final config will use EDITED values, not DB values.")
+                                print(f"  ✏️ Final config after overrides:")
+                                for k in ['density', 'price_per_kg', 'scrap_price_per_kg', 'machine_speed', 
+                                         'piercing_time', 'vaporization_speed', 'vgroove_price', 'bending_price']:
+                                    final_val = part_config.get(k, 'Not set')
+                                    print(f"      {k}: {final_val}")
+                            else:
+                                print(f"  ℹ️ No UI overrides found for key '{key}'. Using DB values.")
                         except Exception as _apply_err:
                             print(f"  ⚠ Failed to apply UI overrides: {_apply_err}")
+                            import traceback
+                            print(f"  ⚠ Traceback: {traceback.format_exc()}")
 
                         if not part_config:
                             print(f"  ❌ DB config not found for part {part_number}: {eff_material_name} / {eff_thickness_mm} / {eff_grade} / {eff_finish}")
@@ -5791,41 +5953,29 @@ def upload_multi():
             grade = file_settings.get('grade') if file_settings.get('grade') is not None else request.form.get('grade', '')
             finish = file_settings.get('finish') if file_settings.get('finish') is not None else request.form.get('finish', '')
 
-            # CRITICAL: Validate that material and thickness are provided before proceeding
+            # Soft-validate: allow fallback to manual selection instead of hard errors
+            material_missing = False
             if not material_name or str(material_name).strip() == '':
-                error_msg = f"ERROR: No material type specified for file '{file.filename}'. Cannot calculate costs without material information."
-                print(f"  ❌ {error_msg}")
-                return jsonify({
-                    'error': error_msg,
-                    'message': f'Please specify a material type for file: {file.filename}'
-                }), 400
+                material_missing = True
+                print(f"  ⚠ No material specified for file '{file.filename}'. Allowing manual selection fallback.")
             
             if not thickness_str or thickness_str.strip() == '':
-                error_msg = f"ERROR: No thickness specified for file '{file.filename}'. Cannot calculate costs without thickness information."
-                print(f"  ❌ {error_msg}")
-                return jsonify({
-                    'error': error_msg,
-                    'message': f'Please specify a thickness for file: {file.filename}'
-                }), 400
+                print(f"  ⚠ No thickness specified for file '{file.filename}'. Defaulting to 0 and deferring costs.")
+                thickness_mm = 0.0
+            else:
+                try:
+                    thickness_mm = float(thickness_str)
+                    if thickness_mm <= 0:
+                        print(f"  ⚠ Invalid thickness '{thickness_str}' for file '{file.filename}'. Defaulting to 0.")
+                        thickness_mm = 0.0
+                except ValueError:
+                    print(f"  ⚠ Invalid thickness format '{thickness_str}' for file '{file.filename}'. Defaulting to 0.")
+                    thickness_mm = 0.0
             
-            try:
-                thickness_mm = float(thickness_str)
-                if thickness_mm <= 0:
-                    error_msg = f"ERROR: Invalid thickness '{thickness_str}' for file '{file.filename}'. Thickness must be greater than 0."
-                    print(f"  ❌ {error_msg}")
-                    return jsonify({
-                        'error': error_msg,
-                        'message': f'Thickness must be greater than 0 for file: {file.filename}'
-                    }), 400
-            except ValueError:
-                error_msg = f"ERROR: Invalid thickness format '{thickness_str}' for file '{file.filename}'. Please provide a valid number."
-                print(f"  ❌ {error_msg}")
-                return jsonify({
-                    'error': error_msg,
-                    'message': f'Please provide a valid thickness number for file: {file.filename}'
-                }), 400
-            
-            print(f"  ✅ Material validation passed for '{file.filename}': '{material_name}' / {thickness_mm}mm")
+            if not material_missing and thickness_mm > 0:
+                print(f"  ✅ Material validation passed for '{file.filename}': '{material_name}' / {thickness_mm}mm")
+            else:
+                print(f"  ⚠ Skipping global material validation for '{file.filename}'; will validate per-part and prompt for manual selection if needed.")
 
             # Progress per file window: map idx over 10..95
             if job_id:
@@ -6457,8 +6607,8 @@ def recalculate_part_costs():
                 punch_price = material_config.get('punch_price', 0.0)
                 punch_cost = punch_count * punch_price
                 
-                # Total cost
-                total_cost = laser_cost_total + material_cost + vgroove_cost + bending_cost + punch_cost
+                # Total cost (exclude punching - handled as external service on frontend)
+                total_cost = laser_cost_total + material_cost + vgroove_cost + bending_cost
                 
                 # Create updated cost data
                 updated_cost_data = {

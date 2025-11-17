@@ -3631,6 +3631,8 @@
                 const bend   = (cd && cd.bending_cost  != null) ? Number(cd.bending_cost).toFixed(2) : '0.00';
                 const vgLen  = (cd && cd.vgroove_length_meters != null) ? Number(cd.vgroove_length_meters).toFixed(3) : '0.000';
                 const vgCost = (cd && cd.vgroove_cost          != null) ? Number(cd.vgroove_cost).toFixed(2) : '0.00';
+                const punchCnt = (cd && cd.punch_count != null) ? Number(cd.punch_count) : 0;
+                const punchCost = (cd && cd.punch_cost != null) ? Number(cd.punch_cost).toFixed(2) : (punchCnt > 0 ? (punchCnt * 0.01).toFixed(2) : '0.00');
                 const total  = (cd && cd.total_cost            != null) ? Number(cd.total_cost).toFixed(2) : '0.00';
                 const parts  = (objectPartsCount != null) ? objectPartsCount : 1;
 
@@ -3676,6 +3678,14 @@
                         <div class="cost-detail">
                             <span class="cost-label">V-Groove Cost:</span>
                             <span class="cost-value">$${vgCost}</span>
+                        </div>
+                        <div class="cost-detail">
+                            <span class="cost-label">Punch Count (external):</span>
+                            <span class="cost-value">${punchCnt}</span>
+                        </div>
+                        <div class="cost-detail">
+                            <span class="cost-label">Punch Cost (external):</span>
+                            <span class="cost-value">$${punchCost}</span>
                         </div>
                         <div class="cost-detail">
                             <span class="cost-label">Total Cost:</span>
@@ -3727,6 +3737,8 @@
                         if (derived.vgroove_count == null) derived.vgroove_count = 0;
                         if (derived.bending_count == null) derived.bending_count = 0;
                         if (derived.total_bending_lines == null) derived.total_bending_lines = 0;
+                        if (derived.punch_count == null) derived.punch_count = (typeof partImg.punch_count === 'number' ? partImg.punch_count : 0);
+                        if (derived.punch_cost == null) derived.punch_cost = (derived.punch_count || 0) * 0.01;
                         if (derived.laser_cost == null) derived.laser_cost = 0;
                         if (derived.material_cost == null) derived.material_cost = 0;
                         if (derived.bending_cost == null) derived.bending_cost = 0;
@@ -3754,6 +3766,7 @@
                     displayCd.material_cost = 0;
                     displayCd.bending_cost = 0;
                     displayCd.vgroove_cost = 0;
+                    displayCd.punch_cost = 0;
                     displayCd.total_cost = 0;
                     // Keep dimensions and non-cost values
                     // area_sq_mm, length_mm, width_mm, perimeter_meters, etc. remain unchanged
@@ -4030,6 +4043,11 @@
                                 <div class="area-number" style="font-size:0.9em;">${[matText, thText, gfText].filter(Boolean).join(' · ')}</div>
                                 <div class="area-label">Parsed</div>
                             </div>` : ''}
+                            ${typeof part.punch_count === 'number' && part.punch_count > 0 ? `
+                            <div class="area-info" style="margin-top:4px;">
+                                <div class="area-number">${part.punch_count}</div>
+                                <div class="area-label">Punching</div>
+                            </div>` : ''}
                             ${costData && costData.cost_data && costData.cost_data.total_bending_lines > 0 ? `
                             <div class="bending-info">
                                 <div class="bending-number">${costData.cost_data.total_bending_lines}</div>
@@ -4304,12 +4322,24 @@
                 for (const m of uniqueMaterials) {
                     const key = materialKey(m);
                     const cfg = overrides[key] || configs[key] || {};
+                    const hasOverrides = overrides[key] !== undefined;
                     const tr = document.createElement('tr');
                     tr.setAttribute('data-mkey', key);
+                    
+                    // Highlight rows with overrides (edited values)
+                    if (hasOverrides) {
+                        tr.style.backgroundColor = '#fff8e1';
+                        tr.title = 'This material has edited values that will override database values when calculating costs.';
+                    }
+                    
+                    // Normalize display values - materials without grade/finish should show empty
+                    const displayGrade = (m.grade == null || m.grade === '' || m.grade === 0 || m.grade === '0') ? '' : String(m.grade);
+                    const displayFinish = (m.finish == null || m.finish === '' || m.finish === 0 || m.finish === '0') ? '' : String(m.finish);
+                    
                     tr.innerHTML = `
                         <td style="padding:10px; border-top:1px solid #eee;">${m.material_name}</td>
-                        <td style="padding:10px; border-top:1px solid #eee;">${m.grade ?? ''}</td>
-                        <td style="padding:10px; border-top:1px solid #eee;">${m.finish ?? ''}</td>
+                        <td style="padding:10px; border-top:1px solid #eee;">${displayGrade}</td>
+                        <td style="padding:10px; border-top:1px solid #eee;">${displayFinish}</td>
                         <td style="padding:10px; border-top:1px solid #eee; text-align:right;">${Number(m.thickness).toFixed(2)}</td>
                         <td style="padding:10px; border-top:1px solid #eee; text-align:right;" data-f="density">${num(cfg.density)}</td>
                         <td style="padding:10px; border-top:1px solid #eee; text-align:right;" data-f="price_per_kg">${num(cfg.price_per_kg)}</td>
@@ -4339,10 +4369,32 @@
                     } else {
                         btn.textContent = '🖊️';
                         const values = readEditedValues(tr);
-                        // Persist in session (frontend only) and recompute
-                        window.materialOverrides[key] = { ...(configs[key]||{}), ...values };
+                        // CRITICAL: Persist edited values - these will override DB values when Calculate Quote is clicked
+                        const baseConfig = configs[key] || {};
+                        window.materialOverrides[key] = { ...baseConfig, ...values };
+                        
+                        // Log what was saved for debugging
+                        console.log(`💾 Saved material overrides for key '${key}':`, window.materialOverrides[key]);
+                        console.log(`   Original DB values:`, baseConfig);
+                        console.log(`   Edited values:`, values);
+                        console.log(`   Final override values:`, window.materialOverrides[key]);
+                        
+                        // Show visual feedback that overrides are saved
+                        const materialName = tr.querySelector('td:first-child')?.textContent || 'Material';
+                        const successMsg = document.getElementById('successMessage');
+                        if (successMsg) {
+                            const changedFields = Object.keys(values).join(', ');
+                            successMsg.textContent = `✅ Material values saved for ${materialName}. Changed: ${changedFields}. Click "Calculate Quote" to recalculate costs with these values.`;
+                            successMsg.style.display = 'block';
+                            setTimeout(() => { successMsg.style.display = 'none'; }, 5000);
+                        }
+                        
+                        // Update display with overridden values
                         applyMaterialOverrides();
                         makeReadOnly(tr, window.materialOverrides[key]);
+                        
+                        // Highlight row to show it has overrides
+                        tr.style.backgroundColor = '#fff8e1';
                     }
                 });
 
@@ -4364,6 +4416,22 @@
         function getUniqueMaterialsFromData(data) {
             const set = new Set();
             const list = [];
+            
+            // Materials that do not require grade/finish - normalize these to empty/0
+            const noGf = new Set(['mild steel', 'steel', 'ms', 'aluminum', 'aluminium', 'alu', 'copper', 'brass']);
+            
+            // Helper function to normalize grade/finish for materials that don't need them
+            function normalizeMaterial(m) {
+                if (!m.material_name) return m;
+                const matLower = String(m.material_name).trim().toLowerCase();
+                if (noGf.has(matLower)) {
+                    // Materials like Aluminum, Copper, Brass, Mild Steel don't need grade/finish
+                    m.grade = null;
+                    m.finish = null;
+                }
+                return m;
+            }
+            
             // Prefer detailed part_costs when present
             const src = Array.isArray(data.part_costs) ? data.part_costs : [];
             for (const pc of src) {
@@ -4374,6 +4442,10 @@
                     finish: pc.applied_finish != null ? pc.applied_finish : (pc.extracted_label && pc.extracted_label.finish)
                 };
                 if (!m.material_name || m.thickness == null) continue;
+                
+                // Normalize grade/finish for materials that don't need them
+                normalizeMaterial(m);
+                
                 const key = materialKey(m);
                 if (set.has(key)) continue;
                 set.add(key);
@@ -4394,6 +4466,10 @@
                         finish: lbl.finish
                     };
                     if (!m.material_name || m.thickness == null) continue;
+                    
+                    // Normalize grade/finish for materials that don't need them
+                    normalizeMaterial(m);
+                    
                     const id = materialKey(m);
                     if (set.has(id)) continue;
                     set.add(id);
@@ -4410,6 +4486,8 @@
                     finish: data.finish
                 };
                 if (m.material_name && m.thickness != null) {
+                    // Normalize grade/finish for materials that don't need them
+                    normalizeMaterial(m);
                     list.push(m);
                 }
             }
@@ -7561,11 +7639,27 @@
                 const file = window.__lastFile;
                 const formData = new FormData();
                 formData.append('file', file);
-                // Attach material overrides from Materials Used table so backend can override DB values
+                // CRITICAL: Attach material overrides from Materials Used table
+                // These are the EDITED values that will override database values in cost calculations
                 try {
                     const overrides = window.materialOverrides || {};
+                    console.log('📤 Sending material overrides to backend:', overrides);
+                    console.log('📤 Override keys:', Object.keys(overrides));
+                    for (const [key, values] of Object.entries(overrides)) {
+                        console.log(`   Key: ${key}`, values);
+                    }
                     formData.append('material_overrides', JSON.stringify(overrides));
-                } catch {}
+                    if (Object.keys(overrides).length > 0) {
+                        const successMsg = document.getElementById('successMessage');
+                        if (successMsg) {
+                            successMsg.textContent = `📤 Sending ${Object.keys(overrides).length} material override(s) to backend. Calculations will use EDITED values, not database values.`;
+                            successMsg.style.display = 'block';
+                            setTimeout(() => { successMsg.style.display = 'none'; }, 3000);
+                        }
+                    }
+                } catch (e) {
+                    console.error('❌ Failed to send material overrides:', e);
+                }
                 
                 // Use updated part_labels if available (from material selection popup), otherwise fallback to form dropdowns
                 const currentData = window.currentData;
