@@ -1159,7 +1159,20 @@ def find_connected_parts(entities, layers=None):
             if len(layer0_entities) + len(circle_entities) + len(ellipse_entities) + len(spline_entities) + len(arc_entities) + len(line_entities) + len(vgroove_entities) + len(other_entities) < 3:
                 print(f"DEBUG: Entity {entity_type} from layer '{layer_name}' with color {color}")
             
-            if entity_type == 'CIRCLE':
+            # PRIORITY 1: Layer 0 with white color (7) - these are PART OUTLINES
+            # ALL entity types on Layer 0 with white color should be treated as part outlines
+            if (layer_name == '0' and color == 7) or (layer_name.upper() == 'WHITE' and color == 7):
+                layer0_entities.append(entity)
+            # PRIORITY 2: Special layers (V-GROOVE, BENDING, PUNCH)
+            elif layer_name.upper() == 'V-GROOVE' and color == 3:
+                vgroove_entities.append(entity)
+            elif layer_name.upper() == 'BENDING':
+                bending_entities.append(entity)
+            elif layer_name.upper() in ('PUNCH', 'PUNCHING') and entity_type in ('CIRCLE', 'ELLIPSE'):
+                # PUNCH/PUNCHING layer circles or ellipses for punching operations
+                punch_entities.append(entity)
+            # PRIORITY 3: Type-based categorization for entities on OTHER layers
+            elif entity_type == 'CIRCLE':
                 circle_entities.append(entity)
             elif entity_type == 'ELLIPSE':
                 ellipse_entities.append(entity)
@@ -1169,28 +1182,16 @@ def find_connected_parts(entities, layers=None):
                 arc_entities.append(entity)
             elif entity_type == 'LINE':
                 line_entities.append(entity)
-            elif layer_name.upper() == 'V-GROOVE' and color == 3:
-                vgroove_entities.append(entity)
-            elif layer_name.upper() == 'BENDING':
-                bending_entities.append(entity)
-            elif layer_name.upper() in ('PUNCH', 'PUNCHING') and entity_type in ('CIRCLE', 'ELLIPSE'):
-                # PUNCH/PUNCHING layer circles or ellipses for punching operations
-                punch_entities.append(entity)
-            elif layer_name == '0' and color == 7:
-                layer0_entities.append(entity)
-            elif layer_name.upper() == 'WHITE' and color == 7:
-                # Treat WHITE layer entities as Layer 0 entities
-                layer0_entities.append(entity)
             else:
                 other_entities.append(entity)
         
         print(f"=== ENTITY SEPARATION DEBUG ===")
-        print(f"Layer 0 entities: {len(layer0_entities)}")
-        print(f"Circle entities: {len(circle_entities)}")
-        print(f"Ellipse entities: {len(ellipse_entities)}")
-        print(f"Spline entities: {len(spline_entities)}")
-        print(f"ARC entities: {len(arc_entities)}")
-        print(f"LINE entities: {len(line_entities)}")
+        print(f"Layer 0 entities (all types with white color): {len(layer0_entities)}")
+        print(f"Circle entities (non-Layer0): {len(circle_entities)}")
+        print(f"Ellipse entities (non-Layer0): {len(ellipse_entities)}")
+        print(f"Spline entities (non-Layer0): {len(spline_entities)}")
+        print(f"ARC entities (non-Layer0): {len(arc_entities)}")
+        print(f"LINE entities (non-Layer0): {len(line_entities)}")
         print(f"V-GROOVE entities: {len(vgroove_entities)}")
         print(f"BENDING entities: {len(bending_entities)}")
         print(f"PUNCH entities: {len(punch_entities)}")
@@ -1199,11 +1200,13 @@ def find_connected_parts(entities, layers=None):
         print(f"Frame entities (for connectivity): {len(layer0_entities) + len(arc_entities) + len(line_entities) + len(spline_entities)}")
         print(f"=== END ENTITY SEPARATION DEBUG ===")
         
-        # Step 2: Find connected frame-forming components (Layer 0, ARCs, LINES)
+        # Step 2: Find connected frame-forming components
+        # Layer 0 entities (all types) are the primary part outlines
+        # Plus ARCs, LINEs, SPLINEs from other layers that may form boundaries
         frame_parts = []
         
         # Combine all potential frame-forming entities
-        # Include more entity types that can form part boundaries
+        # Layer 0 now includes ALL entity types (circles, ellipses, polylines, etc.) with white color
         frame_entities = layer0_entities + arc_entities + line_entities + spline_entities
         
         # Use proximity grouping for large numbers of entities to avoid O(n²) complexity
