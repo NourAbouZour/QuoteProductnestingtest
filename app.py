@@ -855,7 +855,7 @@ def find_connected_entities(entities):
         if not entities:
             return []
         
-        # Extract line segments
+        # Extract line segments using path-based flattening for accurate geometry
         line_segments = []
         for entity in entities:
             if entity.dxftype() == 'LINE':
@@ -863,9 +863,10 @@ def find_connected_entities(entities):
                 end = entity.dxf.end
                 line_segments.append(LineString([(start.x, start.y), (end.x, end.y)]))
             elif entity.dxftype() == 'LWPOLYLINE':
-                points = list(entity.get_points())
+                from geometry.flatten import entity_to_polyline_points
+                points = entity_to_polyline_points(entity, max_sagitta=0.05)
                 if len(points) > 1:
-                    line_segments.append(LineString([(p[0], p[1]) for p in points]))
+                    line_segments.append(LineString(points))
         
         if not line_segments:
             return [entities]  # Return as one group if no line segments
@@ -922,30 +923,22 @@ def get_entity_endpoints(entity):
             endpoints.append(((start.x, start.y), (end.x, end.y)))
             
         elif entity.dxftype() == 'LWPOLYLINE':
-            points = list(entity.get_points())
+            # Use path-based flattening to correctly handle curved segments (bulges)
+            from geometry.flatten import entity_to_polyline_points
+            points = entity_to_polyline_points(entity, max_sagitta=0.05)
             if len(points) > 1:
                 for i in range(len(points) - 1):
-                    endpoints.append(((points[i][0], points[i][1]), 
-                                   (points[i+1][0], points[i+1][1])))
-                # Add closing segment if polyline is closed
-                if entity.closed and len(points) > 2:
-                    endpoints.append(((points[-1][0], points[-1][1]), 
-                                   (points[0][0], points[0][1])))
+                    endpoints.append((points[i], points[i+1]))
+                # Closed polylines are already handled by entity_to_polyline_points
                     
         elif entity.dxftype() == 'POLYLINE':
-            vertices = list(entity.vertices)
-            if len(vertices) > 1:
-                for i in range(len(vertices) - 1):
-                    start_vertex = vertices[i]
-                    end_vertex = vertices[i + 1]
-                    endpoints.append(((start_vertex.dxf.location.x, start_vertex.dxf.location.y),
-                                   (end_vertex.dxf.location.x, end_vertex.dxf.location.y)))
-                # Add closing segment if polyline is closed
-                if entity.closed and len(vertices) > 2:
-                    start_vertex = vertices[-1]
-                    end_vertex = vertices[0]
-                    endpoints.append(((start_vertex.dxf.location.x, start_vertex.dxf.location.y),
-                                   (end_vertex.dxf.location.x, end_vertex.dxf.location.y)))
+            # Use path-based flattening to correctly handle curved segments (bulges)
+            from geometry.flatten import entity_to_polyline_points
+            points = entity_to_polyline_points(entity, max_sagitta=0.05)
+            if len(points) > 1:
+                for i in range(len(points) - 1):
+                    endpoints.append((points[i], points[i+1]))
+                # Closed polylines are already handled by entity_to_polyline_points
                     
         elif entity.dxftype() == 'CIRCLE':
             center = entity.dxf.center
@@ -1068,17 +1061,14 @@ def _get_entity_segments(entity):
             end = entity.dxf.end
             segments.append([(start.x, start.y), (end.x, end.y)])
         elif entity.dxftype() in ['LWPOLYLINE', 'POLYLINE']:
-            if entity.dxftype() == 'LWPOLYLINE':
-                points = list(entity.get_points())
-            else:  # POLYLINE
-                points = [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices]
+            # Use path-based flattening to correctly handle curved segments (bulges)
+            from geometry.flatten import entity_to_polyline_points
+            points = entity_to_polyline_points(entity, max_sagitta=0.05)
             
             if len(points) > 1:
                 for i in range(len(points) - 1):
                     segments.append([points[i], points[i+1]])
-                # Add closing segment if closed
-                if hasattr(entity, 'closed') and entity.closed and len(points) > 2:
-                    segments.append([points[-1], points[0]])
+                # Note: entity_to_polyline_points already handles closed polylines
         elif entity.dxftype() == 'ARC':
             # Approximate arc with multiple segments
             center = entity.dxf.center
@@ -1916,11 +1906,12 @@ def _extract_geometry_fallback(entity):
             geometry.append([(start.x, start.y), (end.x, end.y)])
             
         elif entity.dxftype() == 'LWPOLYLINE':
-            points = list(entity.get_points())
+            # Use path-based flattening to correctly handle curved segments (bulges)
+            from geometry.flatten import entity_to_polyline_points
+            points = entity_to_polyline_points(entity, max_sagitta=0.05)
             if len(points) > 1:
                 for i in range(len(points) - 1):
-                    geometry.append([(points[i][0], points[i][1]), 
-                                   (points[i+1][0], points[i+1][1])])
+                    geometry.append([points[i], points[i+1]])
                     
         elif entity.dxftype() == 'CIRCLE':
             center = entity.dxf.center
@@ -2054,6 +2045,7 @@ def extract_polygon_from_entities(entities):
         from shapely.ops import unary_union, linemerge
         
         # Get all line segments from entities
+        # IMPORTANT: Using entity_to_polyline_points() for LWPOLYLINE to correctly handle bulges
         line_segments = []
         for entity in entities:
             try:
@@ -2062,9 +2054,10 @@ def extract_polygon_from_entities(entities):
                     end = entity.dxf.end
                     line_segments.append(LineString([(start.x, start.y), (end.x, end.y)]))
                 elif entity.dxftype() == 'LWPOLYLINE':
-                    points = list(entity.get_points())
+                    from geometry.flatten import entity_to_polyline_points
+                    points = entity_to_polyline_points(entity, max_sagitta=0.05)
                     if len(points) > 1:
-                        line_segments.append(LineString([(p[0], p[1]) for p in points]))
+                        line_segments.append(LineString(points))
             except Exception as e:
                 print(f"Error processing entity {entity.dxftype()}: {e}")
                 continue
@@ -2259,6 +2252,7 @@ def calculate_part_area(part_entities, layers):
         calculated_areas = []
         
         # Method 1: Try to create a polygon from connected line segments
+        # IMPORTANT: Using entity_to_polyline_points() for LWPOLYLINE to correctly handle bulges
         line_segments = []
         for entity in layer0_entities:
             try:
@@ -2267,9 +2261,11 @@ def calculate_part_area(part_entities, layers):
                     end = entity.dxf.end
                     line_segments.append(LineString([(start.x, start.y), (end.x, end.y)]))
                 elif entity.dxftype() == 'LWPOLYLINE':
-                    points = list(entity.get_points())
+                    # Use path-based flattening to correctly handle curved segments (bulges)
+                    from geometry.flatten import entity_to_polyline_points
+                    points = entity_to_polyline_points(entity, max_sagitta=0.05)
                     if len(points) > 1:
-                        line_segments.append(LineString([(p[0], p[1]) for p in points]))
+                        line_segments.append(LineString(points))
             except Exception as e:
                 print(f"Error processing entity {entity.dxftype()}: {e}")
                 continue
@@ -2732,7 +2728,9 @@ def get_entity_bounds(entity):
             return (min(x_coords), min(y_coords), max(x_coords), max(y_coords))
             
         elif entity.dxftype() == 'LWPOLYLINE':
-            points = list(entity.get_points())
+            # Use path-based flattening to get accurate bounds including curved segments
+            from geometry.flatten import entity_to_polyline_points
+            points = entity_to_polyline_points(entity, max_sagitta=0.1)
             if points:
                 x_coords = [p[0] for p in points]
                 y_coords = [p[1] for p in points]
@@ -2833,11 +2831,11 @@ def get_entity_points(entity):
             points.extend([(start.x, start.y), (end.x, end.y)])
             
         elif entity.dxftype() == 'LWPOLYLINE':
-            polyline_points = list(entity.get_points())
-            # Ensure we have valid 2D points
-            for point in polyline_points:
-                if len(point) >= 2:
-                    points.append((point[0], point[1]))
+            # Use path-based flattening to correctly handle curved segments (bulges)
+            from geometry.flatten import entity_to_polyline_points
+            polyline_points = entity_to_polyline_points(entity, max_sagitta=0.1)
+            # Points are already (x, y) tuples
+            points.extend(polyline_points)
                     
         elif entity.dxftype() == 'CIRCLE':
             center = entity.dxf.center
@@ -4439,9 +4437,13 @@ def calculate_accurate_perimeter(part_entities, layers):
                 total_perimeter_mm += length_mm
                 
             elif entity_type == 'LWPOLYLINE':
-                # Calculate polyline length
+                # Calculate polyline length using path-based flattening
+                # IMPORTANT: Using entity_to_polyline_points() correctly handles bulges (arcs)
+                # The old entity.get_points() approach ignored bulges and calculated straight-line
+                # distances between vertices, giving incorrect perimeter for curved segments.
                 try:
-                    points = list(entity.get_points())
+                    from geometry.flatten import entity_to_polyline_points
+                    points = entity_to_polyline_points(entity, max_sagitta=0.05)
                     if len(points) > 1:
                         polyline_length = 0.0
                         for i in range(len(points) - 1):
@@ -4564,9 +4566,11 @@ def calculate_vgroove_length(part_entities, layers):
                 print(f"  ✓ V-GROOVE LINE: Length = {entity_length_meters:.3f} meters")
                 
             elif entity_type == 'LWPOLYLINE':
-                # Calculate total length of polyline
+                # Calculate total length of polyline using path-based flattening
+                # IMPORTANT: This correctly handles bulges (curved segments)
                 try:
-                    points = list(entity.get_points())
+                    from geometry.flatten import entity_to_polyline_points
+                    points = entity_to_polyline_points(entity, max_sagitta=0.05)
                     if len(points) > 1:
                         total_length_mm = 0.0
                         for j in range(len(points) - 1):
@@ -4584,19 +4588,19 @@ def calculate_vgroove_length(part_entities, layers):
                     entity_length_meters = 0.0
                     
             elif entity_type == 'POLYLINE':
-                # Calculate total length of old-style polyline
+                # Calculate total length of old-style polyline using path-based flattening
                 try:
-                    vertices = list(entity.vertices)
-                    if len(vertices) > 1:
+                    from geometry.flatten import entity_to_polyline_points
+                    points = entity_to_polyline_points(entity, max_sagitta=0.05)
+                    if len(points) > 1:
                         total_length_mm = 0.0
-                        for j in range(len(vertices) - 1):
-                            v1 = vertices[j]
-                            v2 = vertices[j + 1]
-                            segment_length = ((v2.dxf.location.x - v1.dxf.location.x) ** 2 + 
-                                            (v2.dxf.location.y - v1.dxf.location.y) ** 2) ** 0.5
+                        for j in range(len(points) - 1):
+                            p1 = points[j]
+                            p2 = points[j + 1]
+                            segment_length = ((p2[0] - p1[0]) ** 2 + (p2[1] - p1[1]) ** 2) ** 0.5
                             total_length_mm += segment_length
                         entity_length_meters = total_length_mm / 1000.0  # Convert mm to meters
-                        print(f"  ✓ V-GROOVE POLYLINE: Length = {entity_length_meters:.3f} meters ({len(vertices)-1} segments)")
+                        print(f"  ✓ V-GROOVE POLYLINE: Length = {entity_length_meters:.3f} meters ({len(points)-1} segments)")
                     else:
                         entity_length_meters = 0.0
                         print(f"  ✓ V-GROOVE POLYLINE: No valid segments")
@@ -4921,7 +4925,8 @@ def upload_file():
                                 c = ent.dxf.center; r = ent.dxf.radius
                                 xs.extend([c.x - r, c.x + r]); ys.extend([c.y - r, c.y + r])
                             elif ent.dxftype() in ['LWPOLYLINE', 'POLYLINE']:
-                                pts = list(ent.get_points())
+                                from geometry.flatten import entity_to_polyline_points
+                                pts = entity_to_polyline_points(ent, max_sagitta=0.1)
                                 if pts:
                                     xs.extend([p[0] for p in pts]); ys.extend([p[1] for p in pts])
                     if xs and ys:
@@ -8150,12 +8155,9 @@ def entity_to_svg_path(entity):
             return f"M {start_x},{start_y} A {radius},{radius} 0 {large_arc},1 {end_x},{end_y}"
         
         elif entity_type in ['LWPOLYLINE', 'POLYLINE']:
-            if hasattr(entity, 'vertices'):
-                vertices = list(entity.vertices)
-            elif hasattr(entity, 'get_points'):
-                vertices = list(entity.get_points())
-            else:
-                return None
+            # Use path-based flattening to correctly handle curved segments (bulges)
+            from geometry.flatten import entity_to_polyline_points
+            vertices = entity_to_polyline_points(entity, max_sagitta=0.1)
             
             if not vertices:
                 return None
@@ -8164,8 +8166,14 @@ def entity_to_svg_path(entity):
             for vertex in vertices[1:]:
                 path += f" L {vertex[0]},{vertex[1]}"
             
-            if entity.is_closed:
-                path += " Z"
+            # Closed polylines are already handled by entity_to_polyline_points
+            # but we still check in case the last point doesn't match the first
+            if entity.is_closed and vertices:
+                first = vertices[0]
+                last = vertices[-1]
+                # Only add Z if the path isn't already closed
+                if abs(first[0] - last[0]) > 0.01 or abs(first[1] - last[1]) > 0.01:
+                    path += " Z"
             
             return path
         
@@ -8202,7 +8210,8 @@ def _compute_part_bbox(part_entities):
                     xs.extend([c.x - r, c.x + r]); ys.extend([c.y - r, c.y + r])
                 elif ent.dxftype() in ['LWPOLYLINE', 'POLYLINE']:
                     try:
-                        pts = list(ent.get_points())
+                        from geometry.flatten import entity_to_polyline_points
+                        pts = entity_to_polyline_points(ent, max_sagitta=0.1)
                         if pts:
                             xs.extend([p[0] for p in pts]); ys.extend([p[1] for p in pts])
                     except Exception:
