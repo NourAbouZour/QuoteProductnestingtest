@@ -923,104 +923,80 @@ def get_entity_endpoints(entity):
             endpoints.append(((start.x, start.y), (end.x, end.y)))
             
         elif entity.dxftype() == 'LWPOLYLINE':
-            # Use path-based flattening to correctly handle curved segments (bulges)
-            from geometry.flatten import entity_to_polyline_points
-            points = entity_to_polyline_points(entity, max_sagitta=0.05)
+            points = list(entity.get_points())
             if len(points) > 1:
                 for i in range(len(points) - 1):
-                    endpoints.append((points[i], points[i+1]))
-                # Closed polylines are already handled by entity_to_polyline_points
+                    endpoints.append(((points[i][0], points[i][1]), 
+                                      (points[i+1][0], points[i+1][1])))
+                # Add closing segment if polyline is closed
+                if entity.closed and len(points) > 2:
+                    endpoints.append(((points[-1][0], points[-1][1]),
+                                      (points[0][0], points[0][1])))
                     
         elif entity.dxftype() == 'POLYLINE':
-            # Use path-based flattening to correctly handle curved segments (bulges)
-            from geometry.flatten import entity_to_polyline_points
-            points = entity_to_polyline_points(entity, max_sagitta=0.05)
-            if len(points) > 1:
-                for i in range(len(points) - 1):
-                    endpoints.append((points[i], points[i+1]))
-                # Closed polylines are already handled by entity_to_polyline_points
+            vertices = list(entity.vertices)
+            if len(vertices) > 1:
+                for i in range(len(vertices) - 1):
+                    start_vertex = vertices[i]
+                    end_vertex = vertices[i + 1]
+                    endpoints.append(((start_vertex.dxf.location.x, start_vertex.dxf.location.y),
+                                      (end_vertex.dxf.location.x, end_vertex.dxf.location.y)))
+                # Add closing segment if polyline is closed
+                if entity.closed and len(vertices) > 2:
+                    start_vertex = vertices[-1]
+                    end_vertex = vertices[0]
+                    endpoints.append(((start_vertex.dxf.location.x, start_vertex.dxf.location.y),
+                                      (end_vertex.dxf.location.x, end_vertex.dxf.location.y)))
                     
         elif entity.dxftype() == 'CIRCLE':
             center = entity.dxf.center
             radius = entity.dxf.radius
             # Approximate circle with line segments
             angles = np.linspace(0, 2*np.pi, 32)
-            points = []
+            pts = []
             for angle in angles:
                 x = center.x + radius * np.cos(angle)
                 y = center.y + radius * np.sin(angle)
-                points.append((x, y))
-            
-            for i in range(len(points) - 1):
-                endpoints.append((points[i], points[i+1]))
-            endpoints.append((points[-1], points[0]))  # Close the circle
+                pts.append((x, y))
+            for i in range(len(pts) - 1):
+                endpoints.append((pts[i], pts[i+1]))
+            endpoints.append((pts[-1], pts[0]))
             
         elif entity.dxftype() == 'ARC':
             center = entity.dxf.center
             radius = entity.dxf.radius
             start_angle = np.radians(entity.dxf.start_angle)
             end_angle = np.radians(entity.dxf.end_angle)
-            
-            # Ensure end_angle > start_angle
             if end_angle <= start_angle:
                 end_angle += 2 * np.pi
-                
             angles = np.linspace(start_angle, end_angle, 16)
-            points = []
+            pts = []
             for angle in angles:
                 x = center.x + radius * np.cos(angle)
                 y = center.y + radius * np.sin(angle)
-                points.append((x, y))
+                pts.append((x, y))
+            for i in range(len(pts) - 1):
+                endpoints.append((pts[i], pts[i+1]))
             
-            for i in range(len(points) - 1):
-                endpoints.append((points[i], points[i+1]))
-                
         elif entity.dxftype() == 'ELLIPSE':
-            # Use the geometry module to flatten ellipse to segments
             try:
                 from geometry.flatten import to_segments
                 segments = to_segments(entity, tol=0.05)
                 for i in range(len(segments) - 1):
-                    endpoints.append(((segments[i].x, segments[i].y), 
-                                   (segments[i+1].x, segments[i+1].y)))
+                    endpoints.append(((segments[i].x, segments[i].y),
+                                      (segments[i+1].x, segments[i+1].y)))
             except ImportError:
-                # Fallback: approximate ellipse with points
-                center = entity.dxf.center
-                major_axis = entity.dxf.major_axis
-                ratio = entity.dxf.ratio
-                start_param = entity.dxf.start_param
-                end_param = entity.dxf.end_param
-                
-                # Ensure end_param > start_param
-                if end_param <= start_param:
-                    end_param += 2 * np.pi
-                    
-                params = np.linspace(start_param, end_param, 16)
-                points = []
-                for param in params:
-                    # Parametric ellipse equation
-                    x = center.x + major_axis.x * np.cos(param) + major_axis.y * ratio * np.sin(param)
-                    y = center.y + major_axis.y * np.cos(param) - major_axis.x * ratio * np.sin(param)
-                    points.append((x, y))
-                
-                for i in range(len(points) - 1):
-                    endpoints.append((points[i], points[i+1]))
-                    
+                pass  # fallback not critical here
+            
         elif entity.dxftype() == 'SPLINE':
-            # Use the geometry module to flatten spline to segments
             try:
                 from geometry.flatten import to_segments
                 segments = to_segments(entity, tol=0.05)
                 for i in range(len(segments) - 1):
-                    endpoints.append(((segments[i].x, segments[i].y), 
-                                   (segments[i+1].x, segments[i+1].y)))
+                    endpoints.append(((segments[i].x, segments[i].y),
+                                      (segments[i+1].x, segments[i+1].y)))
             except ImportError:
-                # Fallback: use control points as approximation
-                control_points = entity.control_points
-                if len(control_points) >= 2:
-                    for i in range(len(control_points) - 1):
-                        endpoints.append(((control_points[i].x, control_points[i].y), 
-                                       (control_points[i+1].x, control_points[i+1].y)))
+                pass
                 
     except Exception as e:
         print(f"Error extracting endpoints from {entity.dxftype()}: {e}")
@@ -2244,72 +2220,173 @@ def calculate_part_area(part_entities, layers):
         return 0.0
     
     try:
-        from shapely.geometry import LineString, Polygon, Point
-        from shapely.ops import unary_union, linemerge
+        from shapely.geometry import LineString, Polygon, Point, MultiLineString
+        from shapely.ops import unary_union, linemerge, polygonize
         import numpy as np
         
         # Store all calculated areas for validation
         calculated_areas = []
         
-        # Method 1: Try to create a polygon from connected line segments
+        # Method 1: Try to create a polygon using polygonize (best for closed shapes from line segments)
         # IMPORTANT: Using entity_to_polyline_points() for LWPOLYLINE to correctly handle bulges
         line_segments = []
+        closed_polylines = []  # Store already-closed polylines separately
+        
         for entity in layer0_entities:
             try:
-                if entity.dxftype() == 'LINE':
+                entity_type = entity.dxftype()
+                
+                if entity_type == 'LINE':
                     start = entity.dxf.start
                     end = entity.dxf.end
                     line_segments.append(LineString([(start.x, start.y), (end.x, end.y)]))
-                elif entity.dxftype() == 'LWPOLYLINE':
+                    
+                elif entity_type in ('LWPOLYLINE', 'POLYLINE'):
                     # Use path-based flattening to correctly handle curved segments (bulges)
                     from geometry.flatten import entity_to_polyline_points
                     points = entity_to_polyline_points(entity, max_sagitta=0.05)
-                    if len(points) > 1:
+                    if len(points) >= 3:
+                        # Check if polyline is closed (first point == last point or entity.closed)
+                        is_closed = False
+                        try:
+                            is_closed = entity.closed if hasattr(entity, 'closed') else False
+                            # Also check if first and last points are the same
+                            if not is_closed and len(points) >= 3:
+                                dist = np.sqrt((points[0][0] - points[-1][0])**2 + (points[0][1] - points[-1][1])**2)
+                                is_closed = dist < 0.1  # Within 0.1mm tolerance
+                        except:
+                            pass
+                        
+                        if is_closed:
+                            # Closed polyline - can directly create polygon
+                            try:
+                                poly = Polygon(points)
+                                if poly.is_valid and poly.area > 0:
+                                    closed_polylines.append(poly)
+                            except:
+                                # If polygon creation fails, add as line segments
+                                line_segments.append(LineString(points))
+                        else:
+                            line_segments.append(LineString(points))
+                    elif len(points) > 1:
                         line_segments.append(LineString(points))
+                        
+                elif entity_type == 'CIRCLE':
+                    # Circle is a closed shape - create polygon approximation
+                    center = entity.dxf.center
+                    radius = entity.dxf.radius
+                    angles = np.linspace(0, 2*np.pi, 64)
+                    circle_points = [(center.x + radius * np.cos(a), center.y + radius * np.sin(a)) for a in angles]
+                    try:
+                        poly = Polygon(circle_points)
+                        if poly.is_valid and poly.area > 0:
+                            closed_polylines.append(poly)
+                    except:
+                        pass
+                        
+                elif entity_type == 'ELLIPSE':
+                    # Ellipse is a closed shape - use geometry module
+                    try:
+                        from geometry.flatten import entity_to_polyline_points
+                        points = entity_to_polyline_points(entity, max_sagitta=0.05)
+                        if len(points) >= 3:
+                            poly = Polygon(points)
+                            if poly.is_valid and poly.area > 0:
+                                closed_polylines.append(poly)
+                    except:
+                        pass
+                        
+                elif entity_type == 'ARC':
+                    # ARC is not closed - add as line segment
+                    try:
+                        from geometry.flatten import entity_to_polyline_points
+                        points = entity_to_polyline_points(entity, max_sagitta=0.05)
+                        if len(points) > 1:
+                            line_segments.append(LineString(points))
+                    except:
+                        pass
+                        
+                elif entity_type == 'SPLINE':
+                    # Spline may or may not be closed
+                    try:
+                        from geometry.flatten import entity_to_polyline_points
+                        points = entity_to_polyline_points(entity, max_sagitta=0.05)
+                        if len(points) >= 3:
+                            # Check if closed
+                            dist = np.sqrt((points[0][0] - points[-1][0])**2 + (points[0][1] - points[-1][1])**2)
+                            if dist < 0.1:  # Closed within tolerance
+                                poly = Polygon(points)
+                                if poly.is_valid and poly.area > 0:
+                                    closed_polylines.append(poly)
+                            else:
+                                line_segments.append(LineString(points))
+                        elif len(points) > 1:
+                            line_segments.append(LineString(points))
+                    except:
+                        pass
+                        
             except Exception as e:
                 print(f"Error processing entity {entity.dxftype()}: {e}")
                 continue
         
+        # If we have closed polylines, calculate their areas directly
+        if closed_polylines:
+            total_closed_area = sum(p.area for p in closed_polylines)
+            area = total_closed_area / 1000000  # Convert mm² to m²
+            calculated_areas.append(('closed_polyline', area))
+            print(f"Method 1a (Closed Polylines): Area = {area:.6f} m²")
+        
+        # Try to create polygons from line segments using polygonize
         if line_segments:
             try:
-                # Merge all line segments
-                merged_lines = linemerge(line_segments)
+                # Use polygonize to create polygons from line segments
+                # This properly handles creating closed shapes from multiple disconnected lines
+                result_polygons = list(polygonize(line_segments))
                 
-                # Try to create a polygon from the merged lines
-                if merged_lines.geom_type == 'LineString':
-                    coords = list(merged_lines.coords)
-                    if len(coords) >= 3:
-                        try:
-                            polygon = Polygon(coords)
-                            if polygon.is_valid and polygon.area > 0:
-                                area = polygon.area / 1000000  # Convert mm² to m²
-                                calculated_areas.append(('line_merge', area))
-                                print(f"Method 1 (Line Merge): Area = {area:.6f} m²")
-                        except Exception as e:
-                            print(f"Error creating polygon from line merge: {e}")
+                if result_polygons:
+                    # Sum all polygon areas (for parts with holes, outer - inner)
+                    total_area = sum(p.area for p in result_polygons if p.is_valid)
+                    if total_area > 0:
+                        area = total_area / 1000000  # Convert mm² to m²
+                        calculated_areas.append(('polygonize', area))
+                        print(f"Method 1b (Polygonize): Area = {area:.6f} m²")
                 
-                elif merged_lines.geom_type == 'MultiLineString':
-                    # Try to create polygons from each line
-                    polygons = []
-                    for line in merged_lines.geoms:
-                        coords = list(line.coords)
+                # Fallback: try linemerge + polygon if polygonize didn't work well
+                if not result_polygons:
+                    merged_lines = linemerge(line_segments)
+                    
+                    if merged_lines.geom_type == 'LineString':
+                        coords = list(merged_lines.coords)
                         if len(coords) >= 3:
                             try:
                                 polygon = Polygon(coords)
                                 if polygon.is_valid and polygon.area > 0:
-                                    polygons.append(polygon)
-                            except:
-                                pass
+                                    area = polygon.area / 1000000  # Convert mm² to m²
+                                    calculated_areas.append(('line_merge', area))
+                                    print(f"Method 1c (Line Merge): Area = {area:.6f} m²")
+                            except Exception as e:
+                                print(f"Error creating polygon from line merge: {e}")
                     
-                    if polygons:
-                        # Return the largest polygon area
-                        largest_polygon = max(polygons, key=lambda p: p.area)
-                        area = largest_polygon.area / 1000000  # Convert mm² to m²
-                        calculated_areas.append(('multi_line_merge', area))
-                        print(f"Method 1 (Multi-Line Merge): Area = {area:.6f} m²")
+                    elif merged_lines.geom_type == 'MultiLineString':
+                        polygons = []
+                        for line in merged_lines.geoms:
+                            coords = list(line.coords)
+                            if len(coords) >= 3:
+                                try:
+                                    polygon = Polygon(coords)
+                                    if polygon.is_valid and polygon.area > 0:
+                                        polygons.append(polygon)
+                                except:
+                                    pass
+                        
+                        if polygons:
+                            largest_polygon = max(polygons, key=lambda p: p.area)
+                            area = largest_polygon.area / 1000000  # Convert mm² to m²
+                            calculated_areas.append(('multi_line_merge', area))
+                            print(f"Method 1d (Multi-Line Merge): Area = {area:.6f} m²")
                 
             except Exception as e:
-                print(f"Error in Shapely line merging: {e}")
+                print(f"Error in Shapely polygon creation: {e}")
         
         # Method 2: Create polygon from all points using convex hull
         all_points = []
@@ -2474,22 +2551,39 @@ def calculate_part_area(part_entities, layers):
         
         # Validation: Choose the most reliable area calculation
         if calculated_areas:
-            # For multi-entity parts, prefer line merge methods over individual entity calculations
+            # Priority order for area calculation methods:
+            # 1. closed_polyline - direct from closed LWPOLYLINE/CIRCLE/ELLIPSE (most accurate)
+            # 2. polygonize - proper polygon creation from line segments
+            # 3. circle/ellipse - exact mathematical formulas for single entities
+            # 4. line_merge/multi_line_merge - fallback polygon creation
+            # 5. convex_hull/bounding_box - last resort approximations
+            
             if len(part_entities) > 1:
-                preferred_methods = ['line_merge', 'multi_line_merge', 'direct_polygon', 'shapely_polygon', 'circle', 'ellipse', 'arc_sector', 'spline_polygon', 'spline_fallback', 'spline_estimated']
+                # Multi-entity parts: prefer polygon-based methods
+                preferred_methods = ['closed_polyline', 'polygonize', 'line_merge', 'multi_line_merge', 
+                                    'direct_polygon', 'shapely_polygon', 'circle', 'ellipse', 
+                                    'arc_sector', 'spline_polygon', 'spline_fallback', 
+                                    'convex_hull', 'spline_estimated', 'bounding_box']
             else:
-                # For single entities, prefer exact mathematical formulas
-                preferred_methods = ['circle', 'ellipse', 'arc_sector', 'spline_polygon', 'spline_fallback', 'spline_estimated', 'line_merge', 'multi_line_merge', 'direct_polygon', 'shapely_polygon']
+                # Single entities: prefer exact mathematical formulas first
+                preferred_methods = ['closed_polyline', 'circle', 'ellipse', 'polygonize',
+                                    'arc_sector', 'spline_polygon', 'spline_fallback', 
+                                    'line_merge', 'multi_line_merge', 'direct_polygon', 
+                                    'shapely_polygon', 'convex_hull', 'spline_estimated', 'bounding_box']
             
             for method in preferred_methods:
                 for calc_method, area in calculated_areas:
                     if calc_method == method and area > 0:
-                        print(f"Selected method: {method} with area: {area:.6f}")
+                        print(f"Selected method: {method} with area: {area:.6f} m²")
                         return area
             
-            # If no preferred method found, use the largest area
-            largest_area = max(calculated_areas, key=lambda x: x[1])
-            print(f"Selected largest area: {largest_area[0]} with area: {largest_area[1]:.6f}")
+            # If no preferred method found, use the largest area (excluding bounding_box if others exist)
+            non_bbox_areas = [(m, a) for m, a in calculated_areas if m != 'bounding_box' and a > 0]
+            if non_bbox_areas:
+                largest_area = max(non_bbox_areas, key=lambda x: x[1])
+            else:
+                largest_area = max(calculated_areas, key=lambda x: x[1])
+            print(f"Selected largest area: {largest_area[0]} with area: {largest_area[1]:.6f} m²")
             return largest_area[1]
         
         return 0.0
@@ -2499,7 +2593,15 @@ def calculate_part_area(part_entities, layers):
         return 0.0
 
 def get_layer0_entities(part_entities, layers):
-    """Extract only Layer 0 entities from a part (outer boundary only)"""
+    """Extract only Layer 0 entities from a part (outer boundary only)
+    
+    Rules:
+    - Layer '0' with white color (7) = outer boundary (INCLUDE)
+    - Layer 'WHITE' = outer boundary (INCLUDE)
+    - PUNCH/PUNCHING layer = internal features (EXCLUDE from area/perimeter)
+    - V-GROOVE layer = internal features (EXCLUDE from area/perimeter)
+    - BENDING layer = internal features (EXCLUDE from area/perimeter)
+    """
     layer0_entities = []
     for entity in part_entities:
         if not hasattr(entity, 'dxf'):
@@ -2507,11 +2609,20 @@ def get_layer0_entities(part_entities, layers):
         layer_name = getattr(entity.dxf, 'layer', '')
         color = get_entity_color(entity, layers)
         
-        # Include Layer 0 entities (outer boundary)
-        if layer_name == '0':
+        # Exclude internal feature layers
+        upper_layer = layer_name.upper()
+        if upper_layer in ('V-GROOVE', 'VGROOVE', 'BENDING', 'BEND', 'PUNCH', 'PUNCHING'):
+            continue
+        
+        # Include Layer 0 entities with white color (7) - these are outer boundaries
+        if layer_name == '0' and color == 7:
             layer0_entities.append(entity)
         # Also include WHITE layer entities as Layer 0 (for compatibility)
-        elif layer_name.upper() == 'WHITE':
+        elif upper_layer == 'WHITE':
+            layer0_entities.append(entity)
+        # Include Layer 0 entities without specific color if no other option
+        elif layer_name == '0' and not layer0_entities:
+            # Only add if we haven't found any white-colored layer 0 entities yet
             layer0_entities.append(entity)
             
     return layer0_entities
@@ -2728,14 +2839,19 @@ def get_entity_bounds(entity):
             return (min(x_coords), min(y_coords), max(x_coords), max(y_coords))
             
         elif entity.dxftype() == 'LWPOLYLINE':
-            # Use path-based flattening to get accurate bounds including curved segments
-            from geometry.flatten import entity_to_polyline_points
-            points = entity_to_polyline_points(entity, max_sagitta=0.1)
+            points = list(entity.get_points())
             if points:
                 x_coords = [p[0] for p in points]
                 y_coords = [p[1] for p in points]
                 return (min(x_coords), min(y_coords), max(x_coords), max(y_coords))
-                
+            
+        elif entity.dxftype() == 'POLYLINE':
+            vertices = list(entity.vertices)
+            if vertices:
+                x_coords = [v.dxf.location.x for v in vertices]
+                y_coords = [v.dxf.location.y for v in vertices]
+                return (min(x_coords), min(y_coords), max(x_coords), max(y_coords))
+            
         elif entity.dxftype() == 'CIRCLE':
             center = entity.dxf.center
             radius = entity.dxf.radius
@@ -2763,7 +2879,7 @@ def get_entity_bounds(entity):
                 major_length = major_axis.magnitude()
                 minor_length = major_length * ratio
                 return (center.x - major_length, center.y - minor_length, 
-                       center.x + major_length, center.y + minor_length)
+                        center.x + major_length, center.y + minor_length)
             
         elif entity.dxftype() == 'SPLINE':
             # Use the geometry module to get spline bounds
@@ -2775,13 +2891,8 @@ def get_entity_bounds(entity):
                     y_coords = [seg.y for seg in segments]
                     return (min(x_coords), min(y_coords), max(x_coords), max(y_coords))
             except ImportError:
-                # Fallback: use control points for bounds
-                control_points = entity.control_points
-                if control_points:
-                    x_coords = [cp.x for cp in control_points]
-                    y_coords = [cp.y for cp in control_points]
-                    return (min(x_coords), min(y_coords), max(x_coords), max(y_coords))
-            
+                pass
+                
     except Exception as e:
         print(f"Error getting bounds for {entity.dxftype()}: {e}")
     
@@ -2831,11 +2942,11 @@ def get_entity_points(entity):
             points.extend([(start.x, start.y), (end.x, end.y)])
             
         elif entity.dxftype() == 'LWPOLYLINE':
-            # Use path-based flattening to correctly handle curved segments (bulges)
-            from geometry.flatten import entity_to_polyline_points
-            polyline_points = entity_to_polyline_points(entity, max_sagitta=0.1)
-            # Points are already (x, y) tuples
-            points.extend(polyline_points)
+            polyline_points = list(entity.get_points())
+            # Ensure we have valid 2D points
+            for point in polyline_points:
+                if len(point) >= 2:
+                    points.append((point[0], point[1]))
                     
         elif entity.dxftype() == 'CIRCLE':
             center = entity.dxf.center
@@ -4436,7 +4547,7 @@ def calculate_accurate_perimeter(part_entities, layers):
                 length_mm = np.sqrt((end.x - start.x)**2 + (end.y - start.y)**2)
                 total_perimeter_mm += length_mm
                 
-            elif entity_type == 'LWPOLYLINE':
+            elif entity_type in ('LWPOLYLINE', 'POLYLINE'):
                 # Calculate polyline length using path-based flattening
                 # IMPORTANT: Using entity_to_polyline_points() correctly handles bulges (arcs)
                 # The old entity.get_points() approach ignored bulges and calculated straight-line
@@ -4453,7 +4564,7 @@ def calculate_accurate_perimeter(part_entities, layers):
                             polyline_length += segment_length
                         total_perimeter_mm += polyline_length
                 except Exception as e:
-                    print(f"Error calculating LWPOLYLINE perimeter: {e}")
+                    print(f"Error calculating {entity_type} perimeter: {e}")
                     
             elif entity_type == 'CIRCLE':
                 # Calculate circle circumference
