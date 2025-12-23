@@ -2608,23 +2608,39 @@
             <div class="scrap-factor-section">
                 <h3>🔧 SCRAP Factor</h3>
                 <div class="scrap-input-group">
-                    <label for="scrapFactor">SCRAP Factor:</label>
+                    <label for="scrapFactor">Default SCRAP Factor:</label>
                     <input type="number" id="scrapFactor" name="scrap_factor" value="1.20" step="0.01" min="0.01" class="scrap-input">
-                    <!-- <span class="scrap-description">Default: 1.20 (used for material cost calculation)</span> -->
+                    <button type="button" id="applyScrapToAllBtn" class="scrap-btn" style="padding:8px 16px; font-size:0.9em; min-width:auto;" title="Apply this value to all materials in the table">
+                        📋 Apply to All Materials
+                    </button>
+                    <span class="scrap-description" style="font-size:0.85em; color:#666; margin-left:10px;">
+                        💡 Edit individual scrap factors in the "Materials Used" table below
+                    </span>
+                </div>
+
+                <!-- Board Selection for Nesting -->
+                <div class="scrap-factor-section" style="margin-top: 20px; border-top: 1px solid #ddd; padding-top: 15px;">
+                    <h3>📐 Select Boards for Nesting</h3>
+                    <div style="margin-bottom: 10px;">
+                        <button type="button" id="loadBoardsBtn" class="scrap-btn" style="padding:8px 16px; font-size:0.9em;">
+                            🔄 Load Available Boards
+                        </button>
+                        <span style="font-size:0.85em; color:#666; margin-left:10px;">
+                            Select boards to nest parts on before calculating nesting
+                        </span>
+                    </div>
+                    <div id="boardsSelectionContainer" style="display:none; margin-top: 15px;">
+                        <div style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 10px; background: #f9f9f9;">
+                            <div id="boardsList"></div>
+                        </div>
+                        <div style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                            <strong>Selected Boards:</strong> <span id="selectedBoardsSummary">None</span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Board controls -->
                 <div class="scrap-center">
-                    <!-- <div class="scrap-row">
-                        <div class="scrap-field">
-                            <label for="nestGap">Min Part Gap (mm)</label>
-                            <input type="number" id="nestGap" placeholder="e.g. 5" value="5" min="0" step="0.5">
-                        </div>
-                        <div class="scrap-field">
-                            <label for="marginAll">Sheet Margin (mm)</label>
-                            <input type="number" id="marginAll" placeholder="e.g. 10" value="10" min="0" step="0.5">
-                        </div>
-                    </div> -->
                     <div class="scrap-actions">
                         
                         <!-- <button type="button" class="scrap-btn" id="nestMetricsBtn">
@@ -2818,9 +2834,14 @@
                 </div>
             </div>
             
-            <button type="button" class="scrap-btn" id="calcQuoteBtn" onclick="calculateQuote()">
-                ⚡ CALCULATE QUOTE
-            </button>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <button type="button" class="scrap-btn" id="calcQuoteBtn" onclick="calculateQuote()">
+                    ⚡ CALCULATE QUOTE
+                </button>
+                <button type="button" class="scrap-btn" id="calcNestingBtn" onclick="calculateNesting()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    📐 CALCULATE NESTING
+                </button>
+            </div>
             <div class="results-section" id="resultsSection" style="display:none">
                 <div class="stats-grid" id="statsGrid"></div>
                 <div class="image-container" style="margin-bottom:16px;">
@@ -3104,6 +3125,63 @@
             loadMaterialsData();
             initializeExternalServices();
             setupMaterialUpdates();
+            
+            // Setup "Apply to All Materials" button for scrap factor
+            const applyScrapBtn = document.getElementById('applyScrapToAllBtn');
+            if (applyScrapBtn) {
+                applyScrapBtn.addEventListener('click', function() {
+                    const scrapFactorValue = parseFloat(document.getElementById('scrapFactor').value) || 1.20;
+                    const tbody = document.querySelector('.materials-table tbody');
+                    if (!tbody) {
+                        alert('No materials table found. Please upload a file first.');
+                        return;
+                    }
+                    
+                    const rows = tbody.querySelectorAll('tr');
+                    if (rows.length === 0) {
+                        alert('No materials in the table. Please upload a file first.');
+                        return;
+                    }
+                    
+                    let updatedCount = 0;
+                    rows.forEach(tr => {
+                        const key = tr.getAttribute('data-mkey');
+                        const scrapTd = tr.querySelector('[data-f="scrap_factor"]');
+                        if (scrapTd) {
+                            // Check if there's an input (editing mode)
+                            const inp = scrapTd.querySelector('input');
+                            if (inp) {
+                                inp.value = scrapFactorValue.toFixed(2);
+                            } else {
+                                scrapTd.textContent = scrapFactorValue.toFixed(2);
+                            }
+                            
+                            // Update the override for this material
+                            if (!window.materialOverrides) window.materialOverrides = {};
+                            if (!window.materialOverrides[key]) window.materialOverrides[key] = {};
+                            window.materialOverrides[key].scrap_factor = scrapFactorValue;
+                            updatedCount++;
+                            
+                            // Highlight the row to show it has been updated
+                            tr.style.backgroundColor = '#fff8e1';
+                        }
+                    });
+                    
+                    // Apply the overrides to recalculate costs
+                    if (typeof applyMaterialOverrides === 'function') {
+                        applyMaterialOverrides();
+                    }
+                    
+                    const successMsg = document.getElementById('successMessage');
+                    if (successMsg) {
+                        successMsg.textContent = `✅ Scrap factor ${scrapFactorValue.toFixed(2)} applied to ${updatedCount} material(s). Costs have been recalculated.`;
+                        successMsg.style.display = 'block';
+                        setTimeout(() => { successMsg.style.display = 'none'; }, 5000);
+                    }
+                    
+                    console.log(`Applied scrap factor ${scrapFactorValue} to ${updatedCount} materials`);
+                });
+            }
             
             // Add event listeners for cascading dropdowns
             const materialTypeSelect = document.getElementById('materialTypeSelect');
@@ -4302,6 +4380,7 @@
                                     <th style="text-align:right; padding:10px;">Density (g/cm³)</th>
                                     <th style="text-align:right; padding:10px;">Price/kg</th>
                                     <th style="text-align:right; padding:10px;">Scrap Price/kg</th>
+                                    <th style="text-align:right; padding:10px; background:#fff3cd; color:#856404; font-weight:700;">Scrap Factor</th>
                                     <th style="text-align:right; padding:10px;">Laser Speed (m/min)</th>
                                     <th style="text-align:right; padding:10px;">Piercing (s)</th>
                                     <th style="text-align:right; padding:10px;">Vaporization (m/min)</th>
@@ -4336,6 +4415,11 @@
                     const displayGrade = (m.grade == null || m.grade === '' || m.grade === 0 || m.grade === '0') ? '' : String(m.grade);
                     const displayFinish = (m.finish == null || m.finish === '' || m.finish === 0 || m.finish === '0') ? '' : String(m.finish);
                     
+                    // Get the scrap factor for this row - use override if available, otherwise use global default
+                    const rowScrapFactor = (overrides[key] && overrides[key].scrap_factor != null) 
+                        ? overrides[key].scrap_factor 
+                        : (cfg.scrap_factor != null ? cfg.scrap_factor : 1.20);
+                    
                     tr.innerHTML = `
                         <td style="padding:10px; border-top:1px solid #eee;">${m.material_name}</td>
                         <td style="padding:10px; border-top:1px solid #eee;">${displayGrade}</td>
@@ -4344,6 +4428,7 @@
                         <td style="padding:10px; border-top:1px solid #eee; text-align:right;" data-f="density">${num(cfg.density)}</td>
                         <td style="padding:10px; border-top:1px solid #eee; text-align:right;" data-f="price_per_kg">${num(cfg.price_per_kg)}</td>
                         <td style="padding:10px; border-top:1px solid #eee; text-align:right;" data-f="scrap_price_per_kg">${num(cfg.scrap_price_per_kg)}</td>
+                        <td style="padding:10px; border-top:1px solid #eee; text-align:right; background:#fffde7; font-weight:600;" data-f="scrap_factor">${Number(rowScrapFactor).toFixed(2)}</td>
                         <td style="padding:10px; border-top:1px solid #eee; text-align:right;" data-f="machine_speed">${num(cfg.machine_speed)}</td>
                         <td style="padding:10px; border-top:1px solid #eee; text-align:right;" data-f="piercing_time">${num(cfg.piercing_time)}</td>
                         <td style="padding:10px; border-top:1px solid #eee; text-align:right;" data-f="vaporization_speed">${num(cfg.vaporization_speed)}</td>
@@ -4576,16 +4661,21 @@
                     const total_time_min = ct_machine + ct_vap + pt_total;
                     const laser_cost = laser_cost_rate * total_time_min;
 
-                    // Material cost: use UI scrap factor and allow overriding scrap price/kg
+                    // Material cost: use per-row scrap factor from materials table
                     const orig_density = inferOriginalDensityForPart(pc) || 7.85; // g/cm3
                     const orig_price = inferOriginalPriceForPart(pc) || 25.0;
                     const orig_scrap_price = inferOriginalScrapPriceForPart(pc) || 0.0;
                     const density_new = (ov.density != null ? ov.density : orig_density);
                     const price_new = (ov.price_per_kg != null ? ov.price_per_kg : orig_price);
                     const scrap_price_new = (ov.scrap_price_per_kg != null ? ov.scrap_price_per_kg : orig_scrap_price);
+                    // Use per-row scrap factor from materials table (based on material/thickness/grade/finish)
                     const scrap_factor = (function(){
-                        const val = parseFloat(document.getElementById('scrapFactor') && document.getElementById('scrapFactor').value);
-                        return (isNaN(val) || val <= 0) ? 1.20 : val;
+                        // First check if there's an override for this specific material
+                        if (ov.scrap_factor != null && ov.scrap_factor > 0) {
+                            return ov.scrap_factor;
+                        }
+                        // Otherwise use the per-row scrap factor from materials table
+                        return getScrapFactorForPart(pc);
                     })();
                     // Weight in kg
                     const weight_kg = area_m2 * thickness_m * (density_new * 1000.0);
@@ -4643,7 +4733,7 @@
                             });
                             if (ov) {
                                 let changed = false;
-                                ['price_per_kg','scrap_price_per_kg','machine_speed','piercing_time','vaporization_speed','vgroove_price','bending_price'].forEach(f => {
+                                ['price_per_kg','scrap_price_per_kg','scrap_factor','machine_speed','piercing_time','vaporization_speed','vgroove_price','bending_price'].forEach(f => {
                                     if (ov[f] != null && (base[f] == null || Math.abs(Number(ov[f]) - Number(base[f])) > 1e-9)) {
                                         changed = true;
                                     }
@@ -4708,6 +4798,50 @@
                 const v = td && td.textContent ? parseFloat(td.textContent) : null;
                 return isNaN(v) ? null : v;
             } catch { return null; }
+        }
+
+        /**
+         * Get the scrap factor for a part based on its material characteristics.
+         * This looks up the scrap factor from the materials table row that matches 
+         * the part's material, thickness, grade, and finish.
+         * If not found in the table, it falls back to the override value or default 1.20.
+         */
+        function getScrapFactorForPart(pc) {
+            try {
+                const m = {
+                    material_name: pc.applied_material_name,
+                    thickness: pc.applied_thickness,
+                    grade: pc.applied_grade,
+                    finish: pc.applied_finish
+                };
+                const key = materialKey(m);
+                
+                // First check if there's an override for this material
+                const overrides = window.materialOverrides || {};
+                if (overrides[key] && overrides[key].scrap_factor != null) {
+                    return overrides[key].scrap_factor;
+                }
+                
+                // Then check the materials table row
+                const tableRow = document.querySelector(`tr[data-mkey="${CSS.escape(key)}"]`);
+                if (tableRow) {
+                    const td = tableRow.querySelector('[data-f="scrap_factor"]');
+                    if (td) {
+                        // Check if there's an input (editing mode)
+                        const inp = td.querySelector('input');
+                        const v = inp ? parseFloat(inp.value) : parseFloat(td.textContent);
+                        if (!isNaN(v) && v > 0) {
+                            return v;
+                        }
+                    }
+                }
+                
+                // Fallback to default scrap factor
+                return 1.20;
+            } catch (e) { 
+                console.warn('getScrapFactorForPart error', e);
+                return 1.20; 
+            }
         }
 
         // Auto-fill main Material Selection from first extracted label
@@ -7728,8 +7862,626 @@
                 if (calcBtn) { calcBtn.disabled = false; calcBtn.innerHTML = '⚡ CALCULATE QUOTE'; }
             }
         }
-    </script>
 
+        // Store selected boards for nesting
+        let selectedBoards = [];
+
+        // Load available boards from API
+        async function loadAvailableBoards() {
+            try {
+                const response = await fetch('/api/boards');
+                const result = await response.json();
+                
+                if (result.success && result.boards && result.boards.length > 0) {
+                    displayBoardsForSelection(result.boards);
+                } else {
+                    showError('No boards available. Please configure boards in the database.');
+                }
+            } catch (error) {
+                console.error('Error loading boards:', error);
+                showError(`Failed to load boards: ${error.message}`);
+            }
+        }
+
+        // Display boards for selection
+        function displayBoardsForSelection(boards) {
+            const container = document.getElementById('boardsSelectionContainer');
+            const list = document.getElementById('boardsList');
+            const summary = document.getElementById('selectedBoardsSummary');
+            
+            if (!container || !list) return;
+            
+            // Clear previous content
+            list.innerHTML = '';
+            selectedBoards = [];
+            
+            // Create checkboxes for each board with quantity inputs
+            boards.forEach(board => {
+                const boardDiv = document.createElement('div');
+                boardDiv.style.cssText = 'padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 3px; background: white;';
+                
+                const boardId = board.id || 'unknown';
+                const width = board.width_mm || board.length_mm || 0;
+                const height = board.height_mm || board.width_mm || 0;
+                const maxQuantity = board.quantity || 0;
+                const area = width * height;
+                
+                const topRow = document.createElement('div');
+                topRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;';
+                
+                const boardInfo = document.createElement('div');
+                boardInfo.style.cssText = 'flex: 1;';
+                boardInfo.innerHTML = `
+                    <strong>Board ${boardId}</strong>: ${width}×${height}mm 
+                    (Area: ${area.toLocaleString()} mm², Available: ${maxQuantity} pcs)
+                `;
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.dataset.boardId = boardId;
+                checkbox.style.cssText = 'margin-left: 10px; width: 20px; height: 20px; cursor: pointer;';
+                checkbox.addEventListener('change', function() {
+                    const qtyInput = boardDiv.querySelector('input[type="number"]');
+                    if (qtyInput) {
+                        qtyInput.disabled = !this.checked;
+                        if (this.checked && !qtyInput.value) {
+                            qtyInput.value = Math.min(10, maxQuantity); // Default to 10 or max available
+                        }
+                    }
+                    updateSelectedBoards();
+                });
+                
+                topRow.appendChild(boardInfo);
+                topRow.appendChild(checkbox);
+                
+                const bottomRow = document.createElement('div');
+                bottomRow.style.cssText = 'display: flex; align-items: center; gap: 10px; margin-left: 20px;';
+                
+                const qtyLabel = document.createElement('label');
+                qtyLabel.textContent = 'Quantity:';
+                qtyLabel.style.cssText = 'font-size: 0.9em; color: #666;';
+                
+                const qtyInput = document.createElement('input');
+                qtyInput.type = 'number';
+                qtyInput.min = '1';
+                qtyInput.max = maxQuantity;
+                qtyInput.value = Math.min(10, maxQuantity);
+                qtyInput.disabled = true;
+                qtyInput.style.cssText = 'width: 80px; padding: 4px; border: 1px solid #ccc; border-radius: 3px;';
+                qtyInput.dataset.boardId = boardId;
+                qtyInput.addEventListener('change', updateSelectedBoards);
+                
+                bottomRow.appendChild(qtyLabel);
+                bottomRow.appendChild(qtyInput);
+                
+                boardDiv.appendChild(topRow);
+                boardDiv.appendChild(bottomRow);
+                list.appendChild(boardDiv);
+            });
+            
+            container.style.display = 'block';
+            updateSelectedBoardsSummary();
+        }
+
+        // Update selected boards array
+        function updateSelectedBoards() {
+            const checkboxes = document.querySelectorAll('#boardsList input[type="checkbox"]');
+            selectedBoards = [];
+            
+            checkboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    const boardId = checkbox.dataset.boardId;
+                    const qtyInput = document.querySelector(`input[type="number"][data-board-id="${boardId}"]`);
+                    const boardDiv = checkbox.closest('div');
+                    const boardInfo = boardDiv.querySelector('strong').parentElement.textContent;
+                    
+                    // Extract dimensions from board info text
+                    const match = boardInfo.match(/Board (\d+).*?: ([\d.]+)×([\d.]+)mm/);
+                    if (match && qtyInput) {
+                        const quantity = parseInt(qtyInput.value) || 1;
+                        const width = parseFloat(match[2]);
+                        const height = parseFloat(match[3]);
+                        
+                        selectedBoards.push({
+                            id: match[1],
+                            width_mm: width,
+                            height_mm: height,
+                            quantity: quantity
+                        });
+                    }
+                }
+            });
+            
+            updateSelectedBoardsSummary();
+        }
+
+        // Update selected boards summary
+        function updateSelectedBoardsSummary() {
+            const summary = document.getElementById('selectedBoardsSummary');
+            if (!summary) return;
+            
+            if (selectedBoards.length === 0) {
+                summary.textContent = 'None - boards will be loaded from database';
+                summary.style.color = '#999';
+            } else {
+                const total = selectedBoards.length;
+                const totalArea = selectedBoards.reduce((sum, b) => sum + (b.width_mm * b.height_mm * (b.quantity || 1)), 0);
+                summary.textContent = `${total} board type(s) selected (Total area: ${totalArea.toLocaleString()} mm²)`;
+                summary.style.color = '#28a745';
+            }
+        }
+
+        // Display nesting visualization
+        function displayNestingVisualization(result) {
+            // Remove existing visualization if any
+            const existingViz = document.getElementById('nestingVisualizationContainer');
+            if (existingViz) {
+                existingViz.remove();
+            }
+            
+            // Create visualization container
+            const vizContainer = document.createElement('div');
+            vizContainer.id = 'nestingVisualizationContainer';
+            vizContainer.style.cssText = 'margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px; border: 2px solid #007bff;';
+            
+            const title = document.createElement('h3');
+            title.textContent = '📐 Nesting Layout Visualization';
+            title.style.cssText = 'margin-bottom: 15px; color: #007bff;';
+            vizContainer.appendChild(title);
+            
+            const description = document.createElement('p');
+            description.textContent = 'View how parts are arranged on each board. Each board shows the nested parts with their positions.';
+            description.style.cssText = 'margin-bottom: 20px; color: #666; font-size: 0.9em;';
+            vizContainer.appendChild(description);
+            
+            // Create tabs or accordion for multiple plates
+            const tabsContainer = document.createElement('div');
+            tabsContainer.style.cssText = 'display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;';
+            
+            const contentContainer = document.createElement('div');
+            contentContainer.id = 'nestingVizContent';
+            contentContainer.style.cssText = 'min-height: 400px;';
+            
+            result.svg_layouts.forEach((layout, index) => {
+                // Create tab button
+                const tabBtn = document.createElement('button');
+                tabBtn.textContent = `Plate ${index + 1} (${layout.parts_nested || 0} parts)`;
+                tabBtn.className = 'nesting-viz-tab';
+                tabBtn.style.cssText = 'padding: 10px 20px; border: 2px solid #007bff; background: ' + (index === 0 ? '#007bff' : 'white') + '; color: ' + (index === 0 ? 'white' : '#007bff') + '; border-radius: 5px; cursor: pointer; font-weight: bold;';
+                tabBtn.dataset.plateIndex = index;
+                
+                // Create content panel
+                const panel = document.createElement('div');
+                panel.className = 'nesting-viz-panel';
+                panel.dataset.plateIndex = index;
+                panel.style.cssText = 'display: ' + (index === 0 ? 'block' : 'none') + '; padding: 20px; background: white; border-radius: 5px; border: 1px solid #ddd;';
+                
+                // Add board info
+                const boardInfo = document.createElement('div');
+                boardInfo.style.cssText = 'margin-bottom: 15px; padding: 10px; background: #e9ecef; border-radius: 5px;';
+                const board = layout.board || {};
+                const width = board.width_mm || 0;
+                const height = board.height_mm || 0;
+                // Utilization is already a percentage (0-100), don't multiply by 100
+                const utilization = (layout.utilization || 0).toFixed(2);
+                const scrap = (layout.scrap_percentage || 0).toFixed(2);
+                
+                boardInfo.innerHTML = `
+                    <strong>Board ${index + 1}:</strong> ${width}×${height}mm | 
+                    <strong>Parts:</strong> ${layout.parts_nested || 0} | 
+                    <strong>Utilization:</strong> ${utilization}% | 
+                    <strong>Scrap:</strong> ${scrap}%
+                `;
+                panel.appendChild(boardInfo);
+                
+                // Add SVG visualization
+                const svgContainer = document.createElement('div');
+                svgContainer.className = 'nesting-svg-container';
+                svgContainer.style.cssText = 'width: 100%; overflow: auto; border: 1px solid #ddd; border-radius: 5px; background: white; padding: 10px;';
+                
+                if (layout.svg && layout.svg.trim()) {
+                    svgContainer.innerHTML = layout.svg;
+                    // Scale SVG to fit container while maintaining aspect ratio
+                    const svg = svgContainer.querySelector('svg');
+                    if (svg) {
+                        // Add background fill to make board visible (SvgCreator uses fill:none which makes it black)
+                        const viewBox = svg.getAttribute('viewBox');
+                        if (viewBox) {
+                            const vbParts = viewBox.split(/\s+/);
+                            if (vbParts.length === 4) {
+                                const x = parseFloat(vbParts[0]) || 0;
+                                const y = parseFloat(vbParts[1]) || 0;
+                                const w = parseFloat(vbParts[2]) || width || 3000;
+                                const h = parseFloat(vbParts[3]) || height || 1500;
+                                
+                                // Check if background rect already exists
+                                let bgRect = svg.querySelector('rect[data-background="true"]');
+                                if (!bgRect) {
+                                    // Insert a background rectangle as first child
+                                    bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                                    bgRect.setAttribute('data-background', 'true');
+                                    bgRect.setAttribute('x', x.toString());
+                                    bgRect.setAttribute('y', y.toString());
+                                    bgRect.setAttribute('width', w.toString());
+                                    bgRect.setAttribute('height', h.toString());
+                                    bgRect.setAttribute('fill', '#f8f9fa');
+                                    bgRect.setAttribute('stroke', '#dee2e6');
+                                    bgRect.setAttribute('stroke-width', '3');
+                                    svg.insertBefore(bgRect, svg.firstChild);
+                                }
+                            }
+                        }
+                        
+                        // Note: SVG may have transform="scale(1 -1)" to flip Y-axis for CAD coordinates
+                        // We keep this transform to maintain correct part orientation
+                        
+                        // Update SVG container styles
+                        svg.style.cssText = 'max-width: 100%; height: auto; display: block; margin: 0 auto; background: #ffffff;';
+                        svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+                        
+                        // Ensure all paths and shapes are visible with proper colors
+                        const paths = svg.querySelectorAll('path:not([data-background]), rect:not([data-background]), circle, ellipse, polygon');
+                        paths.forEach((path, idx) => {
+                            // Skip the background rect we just added
+                            if (path.getAttribute('data-background') === 'true') return;
+                            
+                            const colors = ['#007bff', '#28a745', '#dc3545', '#ffc107', '#17a2b8', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
+                            const color = colors[idx % colors.length];
+                            
+                            // Update fill - ensure parts have visible fill
+                            const currentFill = path.getAttribute('fill');
+                            if (!currentFill || currentFill === 'none' || currentFill === '') {
+                                path.setAttribute('fill', color);
+                                path.setAttribute('fill-opacity', '0.5');
+                            }
+                            
+                            // Update stroke for visibility
+                            const currentStroke = path.getAttribute('stroke');
+                            if (!currentStroke || currentStroke === 'none' || currentStroke === '') {
+                                path.setAttribute('stroke', color);
+                                path.setAttribute('stroke-width', '2');
+                            } else if (currentStroke === 'black') {
+                                path.setAttribute('stroke', color);
+                            }
+                        });
+                    }
+                } else {
+                    // Create a simple visualization from parts data if SVG not available
+                    const boardWidth = width || 3000;
+                    const boardHeight = height || 1500;
+                    const scale = Math.min(800 / boardWidth, 600 / boardHeight, 1);
+                    const svgWidth = boardWidth * scale;
+                    const svgHeight = boardHeight * scale;
+                    
+                    let svgContent = `<svg width="${svgWidth}" height="${svgHeight}" viewBox="0 0 ${boardWidth} ${boardHeight}" xmlns="http://www.w3.org/2000/svg" style="max-width: 100%; height: auto;">
+                        <!-- Board background -->
+                        <rect x="0" y="0" width="${boardWidth}" height="${boardHeight}" fill="#f8f9fa" stroke="#dee2e6" stroke-width="2"/>
+                        <!-- Parts -->`;
+                    
+                    const colors = ['#007bff', '#28a745', '#dc3545', '#ffc107', '#17a2b8', '#6f42c1', '#e83e8c', '#fd7e14'];
+                    const parts = layout.nested_parts || [];
+                    
+                    parts.forEach((part, idx) => {
+                        const partLength = part.Length || part.length_mm || 100;
+                        const partWidth = part.Width || part.width_mm || 50;
+                        const x = part.X || part.x || 0;
+                        const y = part.Y || part.y || 0;
+                        const rotation = part.Rotation || part.rotation || 0;
+                        const color = colors[idx % colors.length];
+                        
+                        svgContent += `
+                            <g transform="translate(${x}, ${y}) rotate(${rotation})">
+                                <rect x="0" y="0" width="${partLength}" height="${partWidth}" 
+                                      fill="${color}" fill-opacity="0.6" stroke="${color}" stroke-width="1"/>
+                                <text x="${partLength/2}" y="${partWidth/2}" text-anchor="middle" 
+                                      dominant-baseline="middle" font-size="12" fill="#000">${part.Label || part.label || idx + 1}</text>
+                            </g>`;
+                    });
+                    
+                    svgContent += '</svg>';
+                    svgContainer.innerHTML = svgContent;
+                    
+                    // Add note if no parts
+                    if (parts.length === 0) {
+                        svgContainer.innerHTML += '<div style="text-align: center; padding: 20px; color: #999; font-size: 0.9em;">No parts data available for visualization</div>';
+                    }
+                }
+                
+                panel.appendChild(svgContainer);
+                
+                // Tab click handler
+                tabBtn.addEventListener('click', function() {
+                    // Hide all panels
+                    document.querySelectorAll('.nesting-viz-panel').forEach(p => {
+                        p.style.display = 'none';
+                    });
+                    // Reset all tabs
+                    document.querySelectorAll('.nesting-viz-tab').forEach(t => {
+                        t.style.background = 'white';
+                        t.style.color = '#007bff';
+                    });
+                    // Show selected panel
+                    panel.style.display = 'block';
+                    this.style.background = '#007bff';
+                    this.style.color = 'white';
+                });
+                
+                tabsContainer.appendChild(tabBtn);
+                contentContainer.appendChild(panel);
+            });
+            
+            vizContainer.appendChild(tabsContainer);
+            vizContainer.appendChild(contentContainer);
+            
+            // Add close button
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = '✕ Close Visualization';
+            closeBtn.style.cssText = 'margin-top: 15px; padding: 8px 16px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;';
+            closeBtn.addEventListener('click', function() {
+                vizContainer.remove();
+            });
+            vizContainer.appendChild(closeBtn);
+            
+            // Insert after success message or before calculate nesting button
+            const calcBtn = document.getElementById('calcNestingBtn');
+            if (calcBtn && calcBtn.parentElement) {
+                calcBtn.parentElement.insertBefore(vizContainer, calcBtn);
+            } else if (successMsg && successMsg.parentElement) {
+                successMsg.parentElement.insertBefore(vizContainer, successMsg.nextSibling);
+            } else {
+                // Fallback: append to body
+                document.body.appendChild(vizContainer);
+            }
+        }
+
+        // Event listener for load boards button
+        document.addEventListener('DOMContentLoaded', function() {
+            const loadBoardsBtn = document.getElementById('loadBoardsBtn');
+            if (loadBoardsBtn) {
+                loadBoardsBtn.addEventListener('click', loadAvailableBoards);
+            }
+        });
+
+        async function calculateNesting() {
+            try {
+                console.log('📐 Calculate Nesting button clicked');
+                const calcBtn = document.getElementById('calcNestingBtn');
+                if (calcBtn) { 
+                    calcBtn.disabled = true; 
+                    calcBtn.innerHTML = '📐 CALCULATING...'; 
+                }
+                
+                // Check if we have parts data
+                if (!window.currentData) {
+                    console.error('No currentData found');
+                    showError('Please upload and analyze a DXF file first.');
+                    if (calcBtn) { 
+                        calcBtn.disabled = false; 
+                        calcBtn.innerHTML = '📐 CALCULATE NESTING'; 
+                    }
+                    return;
+                }
+
+                console.log('currentData keys:', Object.keys(window.currentData));
+                
+                // Extract parts from currentData
+                const partImages = window.currentData.part_images || [];
+                const partCosts = window.currentData.part_costs || [];
+                const extractedLabels = window.currentData.extracted_part_labels || window.currentData.part_labels || {};
+                
+                console.log('Part images:', partImages.length);
+                console.log('Part costs:', partCosts.length);
+                console.log('Extracted labels:', Object.keys(extractedLabels).length);
+                
+                if (partImages.length === 0 && partCosts.length === 0) {
+                    console.error('No parts found in part_images or part_costs');
+                    showError('No parts found in the DXF file. Please upload a valid DXF file.');
+                    if (calcBtn) { 
+                        calcBtn.disabled = false; 
+                        calcBtn.innerHTML = '📐 CALCULATE NESTING'; 
+                    }
+                    return;
+                }
+
+                // Build parts array for nesting API
+                const parts = [];
+                
+                // Helper function to get quantity from all possible sources
+                function getQuantity(partNumber, partCost, partImg, extractedLabels) {
+                    // Priority 1: partCost.quantity
+                    if (partCost && partCost.quantity) {
+                        return parseInt(partCost.quantity) || 1;
+                    }
+                    // Priority 2: partCost.cost_data.quantity
+                    if (partCost && partCost.cost_data && partCost.cost_data.quantity) {
+                        return parseInt(partCost.cost_data.quantity) || 1;
+                    }
+                    // Priority 3: partImg.quantity
+                    if (partImg && partImg.quantity) {
+                        return parseInt(partImg.quantity) || 1;
+                    }
+                    // Priority 4: extracted_part_labels
+                    if (partNumber && extractedLabels[partNumber] && extractedLabels[partNumber].quantity) {
+                        return parseInt(extractedLabels[partNumber].quantity) || 1;
+                    }
+                    // Default: 1
+                    return 1;
+                }
+                
+                // Try part_costs first (more reliable after quote calculation)
+                if (partCosts.length > 0) {
+                    console.log('Using part_costs data');
+                    for (let i = 0; i < partCosts.length; i++) {
+                        const partCost = partCosts[i];
+                        const costData = partCost.cost_data || {};
+                        const length_mm = costData.length_mm || 0;
+                        const width_mm = costData.width_mm || 0;
+                        const partNumber = partCost.part_number || (i + 1);
+                        const partImg = partImages.find(pi => pi.part_number === partNumber);
+                        const quantity = getQuantity(partNumber, partCost, partImg, extractedLabels);
+                        
+                        if (length_mm > 0 && width_mm > 0) {
+                            parts.push({
+                                id: `part_${partNumber}`,
+                                length_mm: length_mm,
+                                width_mm: width_mm,
+                                quantity: quantity
+                            });
+                            console.log(`Added part ${partNumber}: ${length_mm}x${width_mm}mm, qty: ${quantity}`);
+                        }
+                    }
+                }
+                
+                // Fallback to part_images if no parts from part_costs
+                if (parts.length === 0 && partImages.length > 0) {
+                    console.log('Using part_images data as fallback');
+                    for (let i = 0; i < partImages.length; i++) {
+                        const partImg = partImages[i];
+                        const partNumber = partImg.part_number || (i + 1);
+                        const partCost = partCosts.find(pc => pc.part_number === partNumber) || {};
+                        const costData = partCost.cost_data || {};
+                        
+                        const length_mm = costData.length_mm || partImg.length_mm || 0;
+                        const width_mm = costData.width_mm || partImg.width_mm || 0;
+                        const quantity = getQuantity(partNumber, partCost, partImg, extractedLabels);
+                        
+                        if (length_mm > 0 && width_mm > 0) {
+                            parts.push({
+                                id: `part_${partNumber}`,
+                                length_mm: length_mm,
+                                width_mm: width_mm,
+                                quantity: quantity
+                            });
+                            console.log(`Added part ${partNumber}: ${length_mm}x${width_mm}mm, qty: ${quantity}`);
+                        }
+                    }
+                }
+
+                console.log(`Total parts prepared: ${parts.length}`);
+                
+                // Calculate total quantity
+                const totalQuantity = parts.reduce((sum, p) => sum + (p.quantity || 1), 0);
+                console.log(`Total quantity of all parts: ${totalQuantity}`);
+                
+                // Log each part with its quantity
+                parts.forEach((p, idx) => {
+                    console.log(`Part ${idx + 1}: ${p.length_mm}x${p.width_mm}mm, Quantity: ${p.quantity}`);
+                });
+                
+                if (parts.length === 0) {
+                    console.error('No valid parts with dimensions found');
+                    showError('No valid parts with dimensions found. Please calculate quote first or ensure parts have length and width.');
+                    if (calcBtn) { 
+                        calcBtn.disabled = false; 
+                        calcBtn.innerHTML = '📐 CALCULATE NESTING'; 
+                    }
+                    return;
+                }
+
+                hideMessages();
+                
+                // Show loading message
+                const successMsg = document.getElementById('successMessage');
+                if (successMsg) {
+                    successMsg.textContent = `📐 Calculating nesting for ${parts.length} part type(s) (${totalQuantity} total pieces)...`;
+                    successMsg.style.display = 'block';
+                }
+
+                console.log('Sending request to /api/calculate-nesting with parts:', JSON.stringify(parts, null, 2));
+                
+                // Get scrap factor from UI
+                const scrapFactorEl = document.getElementById('scrapFactor');
+                const scrapFactor = scrapFactorEl ? parseFloat(scrapFactorEl.value) || 1.20 : 1.20;
+                
+                // Prepare request body with parts AND boards (if selected)
+                const requestBody = {
+                    parts: parts,
+                    scrap_factor: scrapFactor
+                };
+                
+                // Include selected boards if any are selected
+                if (selectedBoards && selectedBoards.length > 0) {
+                    requestBody.boards = selectedBoards;
+                    console.log('📐 Using user-selected boards:', selectedBoards);
+                } else {
+                    console.log('📐 No boards selected - will use boards from database');
+                }
+                
+                // Call the nesting API
+                const response = await fetch('/api/calculate-nesting', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                console.log('Response status:', response.status);
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                    console.error('API error:', errorData);
+                    throw new Error(errorData.error || `HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+                console.log('Nesting result:', result);
+                
+                if (result.success) {
+                    // Display the scrap factor result
+                    const scrapFactor = result.scrap_factor || 0;
+                    const scrapPercentage = ((scrapFactor - 1.0) * 100).toFixed(2);
+                    const partsNested = result.total_parts_nested || 0;
+                    const platesUsed = result.total_plates_used || 0;
+                    
+                    if (successMsg) {
+                        successMsg.innerHTML = `
+                            <strong>✅ Nesting Calculation Complete!</strong><br>
+                            <strong>Scrap Factor:</strong> ${scrapFactor.toFixed(4)} (${scrapPercentage}% waste)<br>
+                            <strong>Parts Nested:</strong> ${partsNested}<br>
+                            <strong>Plates Used:</strong> ${platesUsed}
+                        `;
+                        successMsg.style.display = 'block';
+                    }
+                    
+                    // Also update the scrap factor input if it exists
+                    const scrapFactorInput = document.getElementById('scrapFactor');
+                    if (scrapFactorInput) {
+                        scrapFactorInput.value = scrapFactor.toFixed(4);
+                    }
+                    
+                    // Display nesting visualization if SVG layouts are available
+                    if (result.svg_layouts && result.svg_layouts.length > 0) {
+                        displayNestingVisualization(result);
+                    } else if (result.results && result.results.length > 0 && result.results[0].svg_layout) {
+                        // Fallback: use main SVG layout
+                        displayNestingVisualization({
+                            svg_layouts: [{
+                                plate_index: 0,
+                                svg: result.results[0].svg_layout,
+                                board: result.results[0].board,
+                                parts_nested: result.results[0].total_parts_nested || 0,
+                                utilization: result.results[0].utilization || 0,
+                                scrap_percentage: result.results[0].scrap_percentage || 0
+                            }]
+                        });
+                    }
+                } else {
+                    throw new Error(result.error || 'Nesting calculation failed');
+                }
+
+            } catch (error) {
+                console.error('Nesting calculation error:', error);
+                showError(`Failed to calculate nesting: ${error.message}`);
+            } finally {
+                const calcBtn = document.getElementById('calcNestingBtn');
+                if (calcBtn) { 
+                    calcBtn.disabled = false; 
+                    calcBtn.innerHTML = '📐 CALCULATE NESTING'; 
+                }
+            }
+        }
+    </script>
 
 </body>
 </html> 

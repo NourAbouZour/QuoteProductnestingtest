@@ -81,6 +81,14 @@ except Exception as e:
     print(f"Complete nesting (guaranteed all parts fitted) not available: {e}")
     _HAVE_COMPLETE_NESTING = False
 
+# Import Nesting Center cloud API
+try:
+    from nesting_center_api import register_nesting_center_api
+    _HAVE_NESTING_CENTER = True
+except Exception as e:
+    print(f"Nesting Center cloud API not available: {e}")
+    _HAVE_NESTING_CENTER = False
+
 # Import AI scrap calculator
 try:
     from ai_scrap_calculator import AIScrapCalculator, ScrapCalculationInput
@@ -8810,21 +8818,19 @@ def run_fallback_grid_nesting_from_quantities(parts_with_quantities, board_specs
 
 @app.route('/api/nesting/calculate', methods=['POST'])
 def calculate_nesting_with_existing_quantities():
-    """Calculate nesting using fast optimization with timeout protection"""
-    import threading
-    import time
+    """Calculate nesting using Nesting Center API (sends all parts to cloud API instead of calculating manually)"""
     
-    # Cross-platform timeout implementation
-    timeout_occurred = threading.Event()
-    
-    def timeout_handler():
-        time.sleep(60)  # 60 second timeout
-        timeout_occurred.set()
+    if not _HAVE_NESTING_CENTER:
+        return jsonify({
+            'success': False,
+            'error': 'Nesting Center API not available. Please check NestingCredentials.py configuration.'
+        }), 503
     
     try:
-        # Start timeout thread
-        timeout_thread = threading.Thread(target=timeout_handler, daemon=True)
-        timeout_thread.start()
+        # Import Nesting Center API (uses .cursor/nesting/Nesting.py)
+        from nesting_center_api import run_nesting_sync
+        from DatabaseConfig import get_standard_boards
+        
         data = request.get_json()
         
         # Get data that your system already provides
@@ -8841,385 +8847,438 @@ def calculate_nesting_with_existing_quantities():
         if not meaningful_parts and not part_images:
             return jsonify({'error': 'No parts data provided. Please upload a DXF file first.'}), 400
         
-        # Import fast nesting engine for performance
-        from fast_nesting_engine import FastNestingEngine, Part, Board
-        from multi_board_nesting_optimizer import MultiBoardNestingOptimizer
-        from robust_nesting_engine import RobustNestingEngine, Part as RobustPart, Board as RobustBoard
-        from professional_nesting_engine import ProfessionalNestingEngine, Part as ProfPart, Board as ProfBoard
+        # Convert parts to Nesting Center API format with validation
+        nesting_parts = []
+        part_validation_errors = []
         
-        # Extract quantities and create parts for multi-board optimizer
-        parts = []
+        print("\n" + "="*80)
+        print("📋 PART VALIDATION - Verifying all parts before sending to Nesting Center API")
+        print("="*80)
         
         if meaningful_parts:
-            # Use raw parts data (preferred) and generate SVG paths
+            # Use raw parts data (preferred)
             for idx, part in enumerate(meaningful_parts, start=1):
                 label_data = extracted_labels.get(idx, {}) or extracted_labels.get(str(idx), {})
-                quantity = label_data.get('quantity', 1)  # Default to 1 if not found
+                quantity = label_data.get('quantity', 1)
                 if quantity is None or quantity <= 0:
                     quantity = 1
+                    part_validation_errors.append(f"Part {idx}: Quantity was invalid, defaulted to 1")
                 
-                # Use your existing _compute_part_bbox function
+                # Calculate dimensions from bounding box
                 bbox = _compute_part_bbox(part)
                 
-                # If bbox is invalid (all zeros), use real part dimensions from database
+                # If bbox is invalid, try to get dimensions from part data
                 if bbox == (0.0, 0.0, 0.0, 0.0):
-                    print(f"[PART_PROCESSING] Invalid bbox, using real dimensions for part {idx}")
-                    
-                    # Get real part dimensions from the part data
                     part_data = meaningful_parts[idx - 1] if idx <= len(meaningful_parts) else None
-                    if part_data:
-                        real_length = float(part_data.get('length_mm', 0))
-                        real_width = float(part_data.get('width_mm', 0))
-                        
-                        if real_length > 0 and real_width > 0:
-                            bbox = (0, 0, real_length, real_width)
-                            print(f"[PART_PROCESSING] Using real dimensions: {real_length}x{real_width}mm")
-                        else:
-                            # Calculate from entities if real dimensions not available
-                            min_x = min_y = float('inf')
-                            max_x = max_y = float('-inf')
-                            
-                            for entity in part:
-                                if isinstance(entity, dict):
-                                    if entity.get('type') == 'LINE':
-                                        start = entity.get('start', (0, 0))
-                                        end = entity.get('end', (0, 0))
-                                        min_x = min(min_x, start[0], end[0])
-                                        max_x = max(max_x, start[0], end[0])
-                                        min_y = min(min_y, start[1], end[1])
-                                        max_y = max(max_y, start[1], end[1])
-                            
-                            if min_x != float('inf'):
-                                bbox = (min_x, min_y, max_x, max_y)
-                                print(f"[PART_PROCESSING] Calculated from entities: {bbox}")
-                            else:
-                                # Last resort fallback
-                                bbox = (0, 0, 100, 50)
-                                print(f"[PART_PROCESSING] Using fallback bbox: {bbox}")
-                    else:
-                        bbox = (0, 0, 100, 50)
-                        print(f"[PART_PROCESSING] No part data, using fallback bbox: {bbox}")
+                    if part_data and isinstance(part_data, dict):
+                        length_mm = float(part_data.get('length_mm', 0))
+                        width_mm = float(part_data.get('width_mm', 0))
+                        if length_mm > 0 and width_mm > 0:
+                            bbox = (0, 0, length_mm, width_mm)
                 
-                # Generate SVG paths for actual geometric nesting
-                svg_paths = []
-                for entity in part:
-                    svg_path = entity_to_svg_path(entity)
-                    if svg_path:
-                        svg_paths.append(svg_path)
+                length_mm = abs(bbox[2] - bbox[0]) if len(bbox) == 4 else 0
+                width_mm = abs(bbox[3] - bbox[1]) if len(bbox) == 4 else 0
                 
-                # Combine all paths into a single SVG group
-                combined_svg = " ".join(svg_paths) if svg_paths else None
+                # Validate part dimensions
+                if length_mm <= 0 or width_mm <= 0:
+                    part_validation_errors.append(f"Part {idx}: Invalid dimensions ({length_mm}x{width_mm}mm)")
+                    continue
                 
-                # Calculate dimensions
-                length_mm = abs(bbox[2] - bbox[0])
-                width_mm = abs(bbox[3] - bbox[1])
-                area_sq_mm = length_mm * width_mm
+                if length_mm < 1.0 or width_mm < 1.0:
+                    part_validation_errors.append(f"Part {idx}: Dimensions too small ({length_mm}x{width_mm}mm), may cause nesting issues")
                 
-                print(f"[PART_PROCESSING] Part {idx}: bbox={bbox}, dims={length_mm}x{width_mm}, svg_paths={len(svg_paths)}")
+                # Validate quantity
+                if quantity > 10000:
+                    part_validation_errors.append(f"Part {idx}: Very high quantity ({quantity}), verify this is correct")
                 
-                if length_mm > 0 and width_mm > 0:
-                    # Create a simple rectangle SVG if no complex paths
-                    if not combined_svg:
-                        combined_svg = f"M 0,0 L {length_mm},0 L {length_mm},{width_mm} L 0,{width_mm} Z"
-                    
-                    parts.append(Part(
-                        id=str(idx),
-                        width=length_mm,
-                        height=width_mm,
-                        area=area_sq_mm,
-                        quantity=int(quantity),
-                        svg_path=combined_svg,
-                        rotation_allowed=True
-                    ))
-                    print(f"[PART_PROCESSING] ✅ Added part {idx}: {length_mm}x{width_mm}mm × {quantity}")
-                else:
-                    print(f"[PART_PROCESSING] ❌ Skipped part {idx}: invalid dimensions")
+                nesting_parts.append({
+                    'id': f'part_{idx}',
+                    'length_mm': round(length_mm, 2),  # Round to 2 decimal places for precision
+                    'width_mm': round(width_mm, 2),
+                    'quantity': int(quantity)
+                })
+                
+                print(f"  ✅ Part {idx}: {length_mm:.2f}x{width_mm:.2f}mm × {quantity} pieces (Area: {length_mm * width_mm:.2f} mm²)")
         else:
-            # Fallback: use part_images data to create simplified parts
+            # Fallback: use part_images data
             for part_image in part_images:
                 part_number = part_image.get('part_number', 1)
-                
-                # Try to get quantity from extracted labels or from part_image itself
                 label_data = extracted_labels.get(part_number, {}) or extracted_labels.get(str(part_number), {})
                 quantity = label_data.get('quantity', 1)
                 if quantity is None or quantity <= 0:
                     quantity = 1
+                    part_validation_errors.append(f"Part {part_number}: Quantity was invalid, defaulted to 1")
                 
-                # Use dimensions from part_image if available
-                length_mm = part_image.get('length_mm', 0)
-                width_mm = part_image.get('width_mm', 0)
-                if length_mm > 0 and width_mm > 0:
-                    area_sq_mm = length_mm * width_mm
-                    # Create a simple rectangle SVG path
-                    svg_path = f"M 0,0 L {length_mm},0 L {length_mm},{width_mm} L 0,{width_mm} Z"
-                    
-                    parts.append(Part(
-                        id=str(part_number),
-                        width=length_mm,
-                        height=width_mm,
-                        area=area_sq_mm,
-                        quantity=int(quantity),
-                        svg_path=svg_path,
-                        rotation_allowed=True
-                    ))
+                length_mm = float(part_image.get('length_mm', 0))
+                width_mm = float(part_image.get('width_mm', 0))
+                
+                # Validate part dimensions
+                if length_mm <= 0 or width_mm <= 0:
+                    part_validation_errors.append(f"Part {part_number}: Invalid dimensions ({length_mm}x{width_mm}mm)")
+                    continue
+                
+                if length_mm < 1.0 or width_mm < 1.0:
+                    part_validation_errors.append(f"Part {part_number}: Dimensions too small ({length_mm}x{width_mm}mm)")
+                
+                nesting_parts.append({
+                    'id': f'part_{part_number}',
+                    'length_mm': round(length_mm, 2),
+                    'width_mm': round(width_mm, 2),
+                    'quantity': int(quantity)
+                })
+                
+                print(f"  ✅ Part {part_number}: {length_mm:.2f}x{width_mm:.2f}mm × {quantity} pieces (Area: {length_mm * width_mm:.2f} mm²)")
         
-        print(f"[MULTI_BOARD_NESTING] Processing {len(parts)} parts with total quantities: {sum(p.quantity for p in parts)}")
+        # Log validation summary
+        total_parts_quantity = sum(p['quantity'] for p in nesting_parts)
+        total_parts_area = sum(p['length_mm'] * p['width_mm'] * p['quantity'] for p in nesting_parts)
         
-        # Debug: Log part details
-        for i, part in enumerate(parts[:5]):  # Log first 5 parts
-            print(f"[PART_DEBUG] Part {i+1}: {part.width}x{part.height}mm (area: {part.area:.0f}mm²), qty: {part.quantity}")
-        if len(parts) > 5:
-            print(f"[PART_DEBUG] ... and {len(parts) - 5} more parts")
+        print(f"\n📊 VALIDATION SUMMARY:")
+        print(f"  • Total part types: {len(nesting_parts)}")
+        print(f"  • Total part pieces: {total_parts_quantity}")
+        print(f"  • Total parts area: {total_parts_area:,.2f} mm² ({total_parts_area/1_000_000:.4f} m²)")
+        if part_validation_errors:
+            print(f"  ⚠️  Validation warnings: {len(part_validation_errors)}")
+            for err in part_validation_errors:
+                print(f"    - {err}")
+        else:
+            print(f"  ✅ All parts validated successfully")
+        print("="*80 + "\n")
         
-        # Get board specs from database and convert to Board objects
-        all_boards_data = get_board_specs_from_db()
-        boards = []
+        if not nesting_parts:
+            return jsonify({'error': 'No valid parts with dimensions found'}), 400
         
-        for board_data in all_boards_data:
-            board_width = float(board_data.get('width_mm', 0))
-            board_height = float(board_data.get('height_mm', 0))
-            board_area = board_width * board_height
+        # Get boards - FIRST check if boards are provided in request, otherwise get from database
+        boards = None
+        boards_source = None
+        
+        # Option 1: Check if boards are explicitly provided in the request
+        if 'boards' in data and data.get('boards'):
+            boards = data.get('boards')
+            boards_source = "request_data"
+            print("\n📦 BOARDS PROVIDED IN REQUEST - Using user-specified boards")
+        else:
+            # Option 2: Get boards from database
+            try:
+                boards = get_standard_boards()
+                boards_source = "database"
+                print("\n📦 LOADING BOARDS FROM DATABASE")
+            except Exception as e:
+                print(f"⚠️  Warning: Could not load boards from database: {e}")
+                # Option 3: Fallback to default board
+                boards = [{
+                    'id': 'default_board',
+                    'width_mm': 3000,
+                    'height_mm': 1500,
+                    'quantity': 10
+                }]
+                boards_source = "default_fallback"
+                print("⚠️  Using default fallback board (3000x1500mm)")
+        
+        if not boards:
+            return jsonify({
+                'success': False,
+                'error': 'No boards available for nesting. Please provide boards in the request or ensure boards are configured in the database.'
+            }), 400
+        
+        # Validate boards and prepare for API
+        print("📐 BOARD VALIDATION AND PREPARATION:")
+        print(f"  Source: {boards_source}")
+        valid_boards = []
+        total_board_area = 0.0
+        
+        for board in boards:
+            width_mm = float(board.get('width_mm', board.get('width', 0)))
+            height_mm = float(board.get('height_mm', board.get('height', 0)))
+            quantity = int(board.get('quantity', board.get('available_quantity', board.get('qty', 1))))
             
-            print(f"[BOARD_DEBUG] Board {board_data.get('id', 1)}: {board_width}x{board_height}mm (area: {board_area:.0f}mm²)")
+            if width_mm <= 0 or height_mm <= 0:
+                print(f"  ❌ Skipping invalid board {board.get('id', 'unknown')}: {width_mm}x{height_mm}mm")
+                continue
             
-            boards.append(Board(
-                id=str(board_data.get('id', 1)),
-                width=board_width,
-                height=board_height,
-                area=board_area,
-                cost=float(board_data.get('cost_per_sheet', board_data.get('cost', 100.0))),
-                quantity_available=int(board_data.get('quantity', 100))
-            ))
+            board_area = width_mm * height_mm
+            total_board_area += board_area * quantity
+            valid_boards.append({
+                'id': board.get('id', f'board_{len(valid_boards) + 1}'),
+                'width_mm': width_mm,
+                'height_mm': height_mm,
+                'quantity': quantity,
+                'area_mm2': board_area
+            })
+            print(f"  ✅ Board {valid_boards[-1]['id']}: {width_mm}x{height_mm}mm (Area: {board_area:,.2f} mm²), Available Qty: {quantity}")
         
-        print(f"[MULTI_BOARD_NESTING] Using {len(boards)} boards for material '{selected_material}' ({selected_thickness}mm)")
+        if not valid_boards:
+            return jsonify({'error': 'No valid boards found. Please provide valid board dimensions (width_mm, height_mm, quantity).'}), 400
+        
+        boards = valid_boards
+        print(f"  📊 Total: {len(boards)} board type(s) available")
+        print(f"  📊 Total board area capacity: {total_board_area:,.2f} mm² ({total_board_area/1_000_000:.4f} m²)")
+        print(f"  📊 Parts require: {total_parts_area:,.2f} mm² ({total_parts_area/1_000_000:.4f} m²)")
+        
+        # Check if boards are large enough
+        if total_board_area < total_parts_area:
+            print(f"  ⚠️  WARNING: Board capacity ({total_board_area:,.0f} mm²) is less than parts area ({total_parts_area:,.0f} mm²)")
+            print(f"     This may result in incomplete nesting. Consider using larger boards or more quantity.")
+        
+        print()
         
         # Get nesting configuration
         nesting_config = load_admin_config().get('nesting', DEFAULT_NESTING_CONFIG)
         
-        # Use professional nesting engine for accurate results
-        print(f"[NESTING_API] Using professional nesting engine with {len(parts)} parts")
-
-        # Convert to professional engine format with improved ordering
-        prof_parts = []
-        for part in parts:
-            # Validate part data before adding
-            if (part.width > 0 and part.height > 0 and part.quantity > 0):
-                prof_parts.append(Part(
-                    id=part.id,
-                    width=part.width,
-                    height=part.height,
-                    quantity=part.quantity,
-                    rotation_allowed=part.rotation_allowed,
-                    area=part.area,
-                    svg_path=getattr(part, 'svg_path', '')
-                ))
-            else:
-                print(f"[NESTING_API] Skipping invalid part {part.id}: w={part.width}, h={part.height}, qty={part.quantity}")
-        
-        # Sort parts by area (largest first) for better packing efficiency
-        prof_parts.sort(key=lambda p: p.area, reverse=True)
-        print(f"[NESTING_API] Processing {len(prof_parts)} valid parts (sorted by area)")
-
-        prof_boards = []
-        for board in boards:
-            prof_boards.append(Board(
-                id=board.id,
-                width=board.width,
-                height=board.height,
-                cost=board.cost,
-                quantity_available=board.quantity_available,
-                area=board.area
-            ))
-
-        # Use fast nesting engine for performance and timeout protection
-        total_parts = sum(part.quantity for part in prof_parts)
-        print(f"[NESTING_API] Using fast nesting engine for {total_parts} parts")
-        
-        # Initialize fast engine with timeout protection
-        margin_config = nesting_config.get('sheet_margin_mm', {'top': 10, 'right': 10, 'bottom': 10, 'left': 10})
+        # Get settings from config
+        margin_config = nesting_config.get('sheet_margin_mm', {'top': 5, 'right': 5, 'bottom': 5, 'left': 5})
         if isinstance(margin_config, dict):
-            main_margin = margin_config.get('top', 10)
+            margin_mm = margin_config.get('top', 5.0)
         else:
-            main_margin = float(margin_config)
+            margin_mm = float(margin_config)
         
-        # Set timeout based on dataset size
-        timeout_seconds = 15 if total_parts <= 100 else 30 if total_parts <= 500 else 45
+        gap_mm = nesting_config.get('min_part_gap_mm', 5.0)
+        scrap_factor = float(data.get('scrap_factor', 1.20))
         
-        engine = FastNestingEngine(
-            margin_mm=main_margin,
-            min_gap_mm=nesting_config.get('min_part_gap_mm', 5.0),
-            timeout_seconds=timeout_seconds
+        # Validate scrap factor
+        if scrap_factor < 1.0:
+            print(f"⚠️  WARNING: Scrap factor {scrap_factor} is less than 1.0 (no waste). This may be incorrect.")
+        elif scrap_factor > 2.0:
+            print(f"⚠️  WARNING: Scrap factor {scrap_factor} is very high (>100% waste). Verify this is correct.")
+        
+        print(f"⚙️  NESTING SETTINGS:")
+        print(f"  • Gap between parts: {gap_mm} mm")
+        print(f"  • Margin from edges: {margin_mm} mm")
+        print(f"  • Scrap factor: {scrap_factor:.4f} ({((scrap_factor - 1.0) * 100):.2f}% waste)")
+        print(f"  • Rotation: Fixed90 (0°, 90°, 180°, 270°)")
+        print(f"  • Timeout: 60 seconds\n")
+        
+        # Prepare final summary of what will be sent to API
+        print("="*80)
+        print("📤 READY TO SEND TO NESTING CENTER API")
+        print("="*80)
+        print(f"\n📋 PARTS TO SEND ({len(nesting_parts)} types, {total_parts_quantity} total pieces):")
+        for i, part in enumerate(nesting_parts, 1):
+            part_area = part['length_mm'] * part['width_mm']
+            total_part_area = part_area * part['quantity']
+            print(f"  {i}. {part['id']}: {part['length_mm']:.2f}×{part['width_mm']:.2f}mm × {part['quantity']}pcs = {total_part_area:,.0f} mm²")
+        
+        print(f"\n📐 BOARDS TO SEND ({len(boards)} types):")
+        for i, board in enumerate(boards, 1):
+            board_area = board['width_mm'] * board['height_mm']
+            total_board_area_available = board_area * board['quantity']
+            print(f"  {i}. {board['id']}: {board['width_mm']}×{board['height_mm']}mm × {board['quantity']}pcs = {total_board_area_available:,.0f} mm² each")
+        
+        print(f"\n⚙️  SETTINGS:")
+        print(f"  • Gap between parts: {gap_mm} mm")
+        print(f"  • Margin from edges: {margin_mm} mm")
+        print(f"  • Scrap factor: {scrap_factor:.4f} ({(scrap_factor - 1.0) * 100:.2f}% waste)")
+        print(f"  • Rotation: Fixed90")
+        print(f"  • Timeout: 60 seconds")
+        print("="*80)
+        print("\n🚀 SENDING REQUEST TO NESTING CENTER CLOUD API...\n")
+        
+        # Run nesting computation using Nesting Center API (sends all parts AND boards to cloud API)
+        result = run_nesting_sync(
+            parts=nesting_parts,
+            boards=boards,  # Boards are sent here
+            gap_mm=float(gap_mm),
+            margin_mm=float(margin_mm),
+            rotation="Fixed90",
+            timeout=60,
+            scrap_factor=float(scrap_factor)
         )
         
-        # Enable debug for smaller datasets
-        engine.debug = (total_parts < 50)
+        print("\n" + "="*80)
+        print("📥 NESTING RESULT RECEIVED FROM API")
+        print("="*80)
+        print(f"  Success: {result.get('success')}")
+        print(f"  Total plates used: {result.get('total_plates_used', 0)}")
+        print(f"  Total parts nested: {result.get('total_parts_nested', 0)}")
+        print("="*80 + "\n")
         
-        # Check for timeout before starting
-        if timeout_occurred.is_set():
-            raise TimeoutError("Request timeout before processing")
+        # Verify nesting completeness
+        expected_parts = total_parts_quantity
+        actual_parts_nested = result.get('total_parts_nested', 0)
         
-        # Perform fast nesting optimization with timeout protection
-        result = engine.optimize_nesting(prof_parts, prof_boards, max_boards)
-        
-        # Check for timeout after processing
-        if timeout_occurred.is_set():
-            raise TimeoutError("Nesting calculation timeout")
-        
-        # Check for timeout or failure
-        if not result or not result.get('success', False):
-            if result and 'timeout' in str(result.get('error', '')).lower():
-                print(f"[NESTING_API] Timeout detected, using fallback")
-                # Try simple grid placement as fallback
-                from fast_nesting_engine import FastNestingEngine
-                fallback_engine = FastNestingEngine(
-                    margin_mm=main_margin,
-                    min_gap_mm=nesting_config.get('min_part_gap_mm', 5.0),
-                    timeout_seconds=10  # Short timeout for fallback
-                )
-                result = fallback_engine._try_simple_grid_fallback(prof_parts, prof_boards, max_boards)
-            else:
-                print(f"[NESTING_API] Nesting failed: {result.get('error', 'Unknown error')}")
-        
-        # Log results
-        if result and result.get('success', False):
-            parts_fitted = result.get('parts_summary', {}).get('fitted_instances', 0)
-            parts_required = result.get('parts_summary', {}).get('total_instances', 0)
-            print(f"[NESTING_API] Fast engine result: success={result.get('success', False)}, "
-                  f"utilization={result.get('total_utilization', 0):.1%}, "
-                  f"boards={result.get('total_boards_used', 0)}, "
-                  f"parts={parts_fitted}/{parts_required}")
+        if actual_parts_nested < expected_parts:
+            print(f"⚠️  WARNING: Not all parts were nested!")
+            print(f"   Expected: {expected_parts} pieces")
+            print(f"   Nested: {actual_parts_nested} pieces")
+            print(f"   Missing: {expected_parts - actual_parts_nested} pieces\n")
+        elif actual_parts_nested > expected_parts:
+            print(f"⚠️  WARNING: More parts nested than expected!")
+            print(f"   Expected: {expected_parts} pieces")
+            print(f"   Nested: {actual_parts_nested} pieces")
+            print(f"   Extra: {actual_parts_nested - expected_parts} pieces\n")
         else:
-            print(f"[NESTING_API] Nesting failed: {result.get('error', 'Unknown error') if result else 'No result'}")
+            print(f"✅ All parts nested successfully!")
+            print(f"   All {expected_parts} pieces were nested correctly\n")
         
-        print(f"[MULTI_BOARD_NESTING] Optimization complete: {result['total_boards_used']} boards, "
-              f"{result['total_scrap_percentage']:.1%} scrap, {result['total_utilization']:.1%} utilization")
-        
-        # Convert result to format expected by frontend
-        if result.get('success', False):
-            # Create results array for all boards used
-            results = []
-            boards_used = result.get('results', [])
-            for board_result in boards_used:
-                board_obj = board_result.get('board', {})
-                # Ensure we get the correct board dimensions
-                if isinstance(board_obj, dict):
-                    width_mm = board_obj.get('width_mm', 0)
-                    height_mm = board_obj.get('height_mm', 0)
-                    area_sq_mm = board_obj.get('area_sq_mm', width_mm * height_mm)
-                    cost_per_sheet = board_obj.get('cost_per_sheet', 0)
-                elif hasattr(board_obj, 'width_mm') and hasattr(board_obj, 'height_mm'):
-                    width_mm = board_obj.width_mm
-                    height_mm = board_obj.height_mm
-                    area_sq_mm = board_obj.area_sq_mm
-                    cost_per_sheet = board_obj.cost_per_sheet
-                elif hasattr(board_obj, 'width') and hasattr(board_obj, 'height'):
-                    width_mm = board_obj.width
-                    height_mm = board_obj.height
-                    area_sq_mm = board_obj.area
-                    cost_per_sheet = board_obj.cost
-                else:
-                    width_mm = 0
-                    height_mm = 0
-                    area_sq_mm = 0
-                    cost_per_sheet = 0
-                
-                # If still zero, try to get from the original board data
-                if width_mm == 0 or height_mm == 0:
-                    # Look up the board in the original boards data
-                    for orig_board in all_boards_data:
-                        board_id = board_obj.id if hasattr(board_obj, 'id') else getattr(board_obj, 'id', '')
-                        if str(orig_board.get('id', '')) == str(board_id):
-                            width_mm = orig_board.get('width_mm', 0)
-                            height_mm = orig_board.get('height_mm', 0)
-                            area_sq_mm = orig_board.get('width_mm', 0) * orig_board.get('height_mm', 0)
-                            cost_per_sheet = orig_board.get('cost_per_sheet', orig_board.get('cost', 0))
-                            break
-                
-                board_id = board_obj.get('id', 'unknown') if isinstance(board_obj, dict) else (board_obj.id if hasattr(board_obj, 'id') else getattr(board_obj, 'id', 'unknown'))
-                print(f"[BOARD_DATA] Board {board_id}: {width_mm}x{height_mm}mm, cost=${cost_per_sheet}")
-                
-                results.append({
-                    'board': {
-                        'id': str(board_id),
-                        'width_mm': width_mm,
-                        'height_mm': height_mm,
-                        'area_sq_mm': area_sq_mm,
-                        'cost_per_sheet': cost_per_sheet
-                    },
-                    'nested_parts': board_result.get('nested_parts', []),
-                    'utilization': board_result.get('utilization', 0),
-                    'scrap_percentage': board_result.get('scrap_percentage', 1.0),
-                    'total_parts_nested': board_result.get('total_parts_nested', 0),
-                    'total_parts_required': board_result.get('total_parts_required', 0),
-                    'fitting_success': board_result.get('fitting_success', False),
-                    'svg_layout': board_result.get('svg_layout', ''),
-                    'optimization_iterations': 1,
-                    'best_rotation_angle': 0
-                })
-            
-            # Best board is the first one (most efficient)
-            best_board = results[0] if results else None
-            
-            # Get the main SVG layout from the first board
-            main_svg_layout = best_board.get('svg_layout', '') if best_board else ''
-            
-            return jsonify({
-                'success': True,
-                'results': results,
-                'best_board': best_board,
-                'svg_layout': main_svg_layout,  # Add main SVG layout
-                'parts_summary': {
-                    'total_parts': len(parts),
-                    'total_instances': sum(p.quantity for p in parts),
-                    'material': selected_material,
-                    'thickness_mm': selected_thickness
-                },
-                'config_used': nesting_config,
-                'visual_nesting': True,
-                'continuous_optimization': continuous_optimization,
-                'multi_board_optimization': True,
-                'total_boards_used': result.get('total_boards_used', 0),
-                'total_scrap_percentage': result.get('total_scrap_percentage', 100),
-                'total_utilization': result.get('total_utilization', 0),
-                'total_cost': result.get('total_cost', 0),
-                'all_parts_fitted': result.get('all_parts_fitted', False),
-                'efficiency_score': result.get('efficiency_score', 0)
-            })
-        else:
+        if not result.get('success'):
             return jsonify({
                 'success': False,
-                'error': result.get('error', 'No solution found with available boards'),
-                'results': [],
-                'best_board': None,
-                'svg_layout': '',
-                'parts_summary': {
-                    'total_parts': len(parts),
-                    'total_instances': sum(p.quantity for p in parts),
-                    'material': selected_material,
-                    'thickness_mm': selected_thickness
+                'error': result.get('error', 'Nesting computation failed'),
+                'validation_warnings': part_validation_errors,
+                'parts_sent': len(nesting_parts),
+                'parts_expected': expected_parts,
+                'parts_nested': actual_parts_nested
+            }), 500
+        
+        # Convert Nesting Center result to format expected by frontend
+        layouts = result.get('layouts', [])
+        total_plates_used = result.get('total_plates_used', len(layouts))
+        total_parts_nested = result.get('total_parts_nested', 0)
+        
+        # Convert layouts to frontend format with scrap factor verification
+        results = []
+        all_boards_data = boards
+        total_board_area_used = 0.0
+        total_parts_area_nested = 0.0
+        
+        print("📊 LAYOUT ANALYSIS:")
+        for i, layout in enumerate(layouts):
+            # Try to get board info from layout
+            plate_index = layout.get('plate_index', i)
+            
+            # Get board dimensions from original boards data
+            board_info = all_boards_data[i % len(all_boards_data)] if all_boards_data else {}
+            width_mm = float(board_info.get('width_mm', 3000))
+            height_mm = float(board_info.get('height_mm', 1500))
+            area_sq_mm = width_mm * height_mm
+            cost_per_sheet = float(board_info.get('cost_per_sheet', board_info.get('cost', 100.0)))
+            
+            # Get nested parts from layout
+            nested_parts_list = layout.get('parts', [])
+            parts_nested_count = layout.get('parts_nested', len(nested_parts_list))
+            
+            # Calculate utilization from API result
+            area_parts_nested = float(layout.get('area_parts_nested', 0))
+            area_raw_plate_used = float(layout.get('area_raw_plate_used', area_sq_mm))
+            area_raw_plate_total = float(layout.get('area_raw_plate_total', area_sq_mm))
+            
+            # If API didn't provide area data, calculate from parts
+            if area_parts_nested == 0 and nested_parts_list:
+                for part in nested_parts_list:
+                    if isinstance(part, dict):
+                        part_length = float(part.get('Length', part.get('length_mm', 0)))
+                        part_width = float(part.get('Width', part.get('width_mm', 0)))
+                        area_parts_nested += part_length * part_width
+                area_raw_plate_used = area_sq_mm if area_raw_plate_used == 0 else area_raw_plate_used
+            
+            # Calculate actual utilization and scrap
+            if area_raw_plate_used > 0:
+                utilization = area_parts_nested / area_raw_plate_used
+                scrap_area = area_raw_plate_used - area_parts_nested
+                scrap_percentage = (scrap_area / area_raw_plate_used) * 100 if area_raw_plate_used > 0 else 0.0
+            else:
+                utilization = 0.0
+                scrap_percentage = 100.0
+            
+            # Accumulate totals for verification
+            total_board_area_used += area_raw_plate_used
+            total_parts_area_nested += area_parts_nested
+            
+            # Verify scrap factor matches expected
+            expected_scrap_percentage = (scrap_factor - 1.0) * 100
+            scrap_difference = abs(scrap_percentage - expected_scrap_percentage)
+            
+            if scrap_difference > 5.0:  # More than 5% difference
+                print(f"  ⚠️  Plate {i+1}: Scrap {scrap_percentage:.2f}% differs from expected {expected_scrap_percentage:.2f}%")
+            else:
+                print(f"  ✅ Plate {i+1}: {width_mm}x{height_mm}mm, {parts_nested_count} parts, "
+                      f"Utilization: {utilization*100:.2f}%, Scrap: {scrap_percentage:.2f}%")
+            
+            results.append({
+                'board': {
+                    'id': str(board_info.get('id', i + 1)),
+                    'width_mm': width_mm,
+                    'height_mm': height_mm,
+                    'area_sq_mm': area_sq_mm,
+                    'cost_per_sheet': cost_per_sheet
                 },
-                'total_boards_used': 0,
-                'total_scrap_percentage': 100,
-                'total_utilization': 0,
-                'all_parts_fitted': False
+                'nested_parts': nested_parts_list,
+                'utilization': utilization,
+                'scrap_percentage': scrap_percentage,
+                'total_parts_nested': parts_nested_count,
+                'total_parts_required': parts_nested_count,
+                'fitting_success': True,
+                'svg_layout': layout.get('svg', ''),
+                'optimization_iterations': 1,
+                'best_rotation_angle': 0,
+                'area_parts_nested_mm2': area_parts_nested,
+                'area_board_used_mm2': area_raw_plate_used
             })
         
-    except TimeoutError as e:
-        print(f"Nesting calculation timeout: {e}")
+        # Calculate totals and verify scrap factor
+        if results:
+            total_utilization = total_parts_area_nested / total_board_area_used if total_board_area_used > 0 else 0.0
+            total_scrap_percentage = (1.0 - total_utilization) * 100 if total_utilization > 0 else 100.0
+            total_cost = sum(r['board']['cost_per_sheet'] for r in results)
+            
+            print(f"\n📈 OVERALL STATISTICS:")
+            print(f"  • Total board area used: {total_board_area_used:,.2f} mm² ({total_board_area_used/1_000_000:.4f} m²)")
+            print(f"  • Total parts area nested: {total_parts_area_nested:,.2f} mm² ({total_parts_area_nested/1_000_000:.4f} m²)")
+            print(f"  • Overall utilization: {total_utilization*100:.2f}%")
+            print(f"  • Overall scrap: {total_scrap_percentage:.2f}%")
+            print(f"  • Expected scrap (from factor {scrap_factor}): {((scrap_factor - 1.0) * 100):.2f}%")
+            print(f"  • Scrap difference: {abs(total_scrap_percentage - ((scrap_factor - 1.0) * 100)):.2f}%")
+        else:
+            total_utilization = 0.0
+            total_scrap_percentage = 100.0
+            total_cost = 0.0
+        
+        best_board = results[0] if results else None
+        main_svg_layout = best_board.get('svg_layout', '') if best_board else ''
+        
+        # Extract SVG layouts from Nesting Center API result for visualization
+        svg_layouts_from_api = result.get('svg_layouts', [])
+        all_svg_layouts = []
+        
+        # Build complete SVG layout information for each plate
+        for i, layout_result in enumerate(results):
+            # Try to get SVG from API result
+            api_svg_item = next((sl for sl in svg_layouts_from_api if sl.get('plate_index') == i), None)
+            svg_content = api_svg_item.get('svg', '') if api_svg_item else layout_result.get('svg_layout', '')
+            
+            all_svg_layouts.append({
+                'plate_index': i,
+                'board': layout_result.get('board', {}),
+                'svg': svg_content,
+                'parts_nested': layout_result.get('total_parts_nested', 0),
+                'utilization': layout_result.get('utilization', 0),
+                'scrap_percentage': layout_result.get('scrap_percentage', 0),
+                'nested_parts': layout_result.get('nested_parts', [])
+            })
+        
+        print("="*80 + "\n")
+        
         return jsonify({
-            'success': False,
-            'error': 'Nesting calculation timeout - please try with fewer parts or contact support',
-            'results': [],
-            'best_board': None,
+            'success': True,
+            'results': results,
+            'best_board': best_board,
+            'svg_layout': main_svg_layout,
+            'svg_layouts': all_svg_layouts,  # All SVG layouts for visualization
             'parts_summary': {
-                'total_parts': 0,
-                'total_instances': 0,
-                'material': 'Unknown',
-                'thickness_mm': 0
-            }
-        }), 408  # Request Timeout
+                'total_parts': len(nesting_parts),
+                'total_instances': sum(p['quantity'] for p in nesting_parts),
+                'material': selected_material,
+                'thickness_mm': selected_thickness
+            },
+            'config_used': nesting_config,
+            'visual_nesting': True,
+            'continuous_optimization': continuous_optimization,
+            'multi_board_optimization': True,
+            'total_boards_used': total_plates_used,
+            'total_scrap_percentage': total_scrap_percentage,
+            'total_utilization': total_utilization,
+            'total_cost': total_cost,
+            'all_parts_fitted': actual_parts_nested >= expected_parts,
+            'efficiency_score': total_utilization,
+            'scrap_factor_used': scrap_factor,
+            'parts_sent': len(nesting_parts),
+            'parts_expected': expected_parts,
+            'parts_nested': actual_parts_nested,
+            'validation_warnings': part_validation_errors if part_validation_errors else []
+        })
+        
     except Exception as e:
-        print(f"Multi-board nesting calculation error: {e}")
+        print(f"Nesting Center API error: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({
@@ -9544,5 +9603,286 @@ if __name__ == '__main__':
             print("✅ Complete Nesting API (Guaranteed All Parts Fitted) registered successfully")
         except Exception as e:
             print(f"❌ Failed to register Complete Nesting API: {e}")
+    
+    # Register Nesting Center cloud API
+    if _HAVE_NESTING_CENTER:
+        try:
+            register_nesting_center_api(app)
+        except Exception as e:
+            print(f"❌ Failed to register Nesting Center API: {e}")
+    
+    @app.route('/api/boards', methods=['GET'])
+    def get_available_boards():
+        """Get available boards from database for nesting selection"""
+        try:
+            from DatabaseConfig import get_standard_boards
+            boards = get_standard_boards()
+            return jsonify({
+                'success': True,
+                'boards': boards
+            })
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': str(e),
+                'boards': []
+            }), 500
+
+    @app.route('/api/calculate-nesting', methods=['POST'])
+    def calculate_nesting():
+        """
+        Calculate nesting using Nesting Center API (from .cursor/nesting folder).
+        Sends parts AND boards to the Nesting Center cloud API and returns scrap factor.
+        """
+        if not _HAVE_NESTING_CENTER:
+            return jsonify({
+                'success': False,
+                'error': 'Nesting Center API not available'
+            }), 503
+
+        try:
+            # Import Nesting Center API (uses .cursor/nesting/Nesting.py)
+            from nesting_center_api import run_nesting_sync
+            from DatabaseConfig import get_standard_boards
+
+            data = request.get_json()
+            if not data or 'parts' not in data:
+                return jsonify({
+                    'success': False,
+                    'error': 'No parts data provided'
+                }), 400
+
+            parts = data.get('parts', [])
+            if not parts:
+                return jsonify({
+                    'success': False,
+                    'error': 'Parts list is empty'
+                }), 400
+            
+            # Log received parts with quantities
+            print(f"\n[Calculate Nesting] Received {len(parts)} part types:")
+            total_quantity = 0
+            for i, part in enumerate(parts, 1):
+                qty = part.get('quantity', 1)
+                total_quantity += qty
+                print(f"  Part {i}: {part.get('length_mm', 0)}x{part.get('width_mm', 0)}mm, Quantity: {qty}")
+            print(f"  Total quantity: {total_quantity} pieces\n")
+            
+            # Get boards - check if provided in request, otherwise get from database
+            boards = data.get('boards', None)
+            boards_source = "user_provided" if boards else "database"
+            
+            if not boards:
+                # Load from database
+                try:
+                    boards = get_standard_boards()
+                    if boards:
+                        print(f"[Calculate Nesting] Loaded {len(boards)} board types from database")
+                except Exception as e:
+                    print(f"Warning: Could not load boards from database: {e}")
+                    boards = None
+            
+            # Fallback to default board if still no boards
+            if not boards:
+                print(f"[Calculate Nesting] Using default fallback board")
+                boards = [{
+                    'id': 'default_board',
+                    'width_mm': 3000,
+                    'height_mm': 1500,
+                    'quantity': 10
+                }]
+                boards_source = "default_fallback"
+            
+            # Log boards being used
+            print(f"[Calculate Nesting] Using {len(boards)} board type(s) (source: {boards_source}):")
+            for board in boards:
+                width = board.get('width_mm', 0)
+                height = board.get('height_mm', 0)
+                qty = board.get('quantity', 0)
+                print(f"  Board {board.get('id', 'unknown')}: {width}x{height}mm, Quantity: {qty}")
+            
+            # Get scrap factor from request (if provided)
+            scrap_factor = float(data.get('scrap_factor', 1.20))
+            
+            # Run nesting computation
+            result = run_nesting_sync(
+                parts=parts,
+                boards=boards,
+                gap_mm=5.0,
+                margin_mm=5.0,
+                rotation="Fixed90",
+                timeout=60,
+                scrap_factor=scrap_factor
+            )
+            
+            print(f"\n[Calculate Nesting] Raw result keys: {list(result.keys()) if result else 'None'}")
+            print(f"[Calculate Nesting] Result success: {result.get('success') if result else 'None'}")
+            print(f"[Calculate Nesting] Total parts nested: {result.get('total_parts_nested', 0) if result else 0}")
+            print(f"[Calculate Nesting] Total plates used: {result.get('total_plates_used', 0) if result else 0}")
+            print(f"[Calculate Nesting] Layouts: {len(result.get('layouts', [])) if result else 0}")
+            
+            if not result.get('success'):
+                return jsonify({
+                    'success': False,
+                    'error': result.get('error', 'Nesting computation failed')
+                }), 500
+            
+            # Calculate total parts area (all parts that need to be nested)
+            total_parts_area = 0.0
+            for part in parts:
+                area = (part.get('length_mm', 0) * part.get('width_mm', 0)) * part.get('quantity', 1)
+                total_parts_area += area
+            
+            print(f"[Calculate Nesting] Total parts area: {total_parts_area} mm²")
+            
+            # Get layouts from result
+            layouts = result.get('layouts', [])
+            plates_used = result.get('total_plates_used', len(layouts) if layouts else 0)
+            
+            print(f"[Calculate Nesting] Number of layouts: {len(layouts)}")
+            print(f"[Calculate Nesting] Total plates used: {plates_used}")
+            
+            # Calculate used board area based on actual layouts
+            used_board_area = 0.0
+            nested_parts_area = 0.0
+            
+            # Try to extract area information from layouts (from RawPlatesNested)
+            if layouts:
+                for layout in layouts:
+                    # Check if layout has area information from RawPlatesNested
+                    area_raw_plate_used = layout.get('area_raw_plate_used', 0)
+                    area_parts_nested = layout.get('area_parts_nested', 0)
+                    
+                    if area_raw_plate_used > 0:
+                        used_board_area += area_raw_plate_used
+                        print(f"[Calculate Nesting] Layout {layout.get('plate_index', 0)}: Used area = {area_raw_plate_used} mm²")
+                    
+                    if area_parts_nested > 0:
+                        nested_parts_area += area_parts_nested
+                        print(f"[Calculate Nesting] Layout {layout.get('plate_index', 0)}: Parts area = {area_parts_nested} mm²")
+            
+            # If we didn't get area info from layouts, try to calculate from board dimensions
+            if used_board_area == 0 and plates_used > 0:
+                # Try to get board dimensions from result context first
+                result_context = result.get('Context', {})
+                problem = result_context.get('Problem', {}) if isinstance(result_context, dict) else {}
+                raw_plates = problem.get('RawPlates', []) if isinstance(problem, dict) else []
+                
+                board_width = 0.0
+                board_height = 0.0
+                
+                # Try to get board size from result context
+                if raw_plates and len(raw_plates) > 0:
+                    first_raw_plate = raw_plates[0]
+                    if isinstance(first_raw_plate, dict):
+                        rect_shape = first_raw_plate.get('RectangularShape', {})
+                        if rect_shape:
+                            board_width = float(rect_shape.get('Length', 0))
+                            board_height = float(rect_shape.get('Width', 0))
+                            print(f"[Calculate Nesting] Got board size from result context: {board_width}x{board_height}mm")
+                
+                # Fallback to boards parameter if not found in result
+                if board_width == 0 or board_height == 0:
+                    first_board = boards[0] if boards else None
+                    if first_board:
+                        board_width = float(first_board.get('width_mm', 0))
+                        board_height = float(first_board.get('height_mm', 0))
+                        print(f"[Calculate Nesting] Got board size from boards parameter: {board_width}x{board_height}mm")
+                
+                # Final fallback to default
+                if board_width == 0 or board_height == 0:
+                    board_width = 3000.0
+                    board_height = 1500.0
+                    print(f"[Calculate Nesting] Using default board size: {board_width}x{board_height}mm")
+                
+                board_area = board_width * board_height
+                used_board_area = board_area * plates_used
+                print(f"[Calculate Nesting] Calculated used board area: {used_board_area} mm² ({plates_used} plates × {board_area} mm²)")
+            
+            # If we still don't have nested_parts_area, use total_parts_area
+            if nested_parts_area == 0:
+                nested_parts_area = total_parts_area
+                print(f"[Calculate Nesting] Using total parts area as nested parts area: {nested_parts_area} mm²")
+            
+            print(f"[Calculate Nesting] Used board area: {used_board_area} mm²")
+            print(f"[Calculate Nesting] Nested parts area: {nested_parts_area} mm²")
+            print(f"[Calculate Nesting] Scrap factor sent to API: {scrap_factor}\n")
+            
+            # Extract SVG layouts for visualization
+            svg_layouts_from_result = result.get('svg_layouts', [])
+            layouts_data = result.get('layouts', [])
+            
+            print(f"[Calculate Nesting] SVG layouts from result: {len(svg_layouts_from_result)}")
+            print(f"[Calculate Nesting] Layouts data: {len(layouts_data)}")
+            
+            # Build layouts with SVG and part details
+            visualization_layouts = []
+            for i, layout in enumerate(layouts_data):
+                # Find matching SVG layout
+                svg_layout_item = next((sl for sl in svg_layouts_from_result if sl.get('plate_index') == i), None)
+                svg_content = svg_layout_item.get('svg', '') if svg_layout_item else ''
+                
+                # Get board info - use the board that was actually used
+                board_info = boards[i % len(boards)] if boards else {}
+                width_mm = float(board_info.get('width_mm', board_width if 'board_width' in locals() else 3000))
+                height_mm = float(board_info.get('height_mm', board_height if 'board_height' in locals() else 1500))
+                
+                # Get parts data from layout
+                parts_list = layout.get('parts', [])
+                parts_count = layout.get('parts_nested', len(parts_list))
+                
+                # Calculate utilization
+                area_parts = layout.get('area_parts_nested', 0)
+                area_board_used = layout.get('area_raw_plate_used', width_mm * height_mm)
+                # Fix: utilization should be parts_area / board_area, not percentage * 100
+                utilization = (area_parts / area_board_used) if area_board_used > 0 else 0
+                # Cap utilization at 1.0 (100%) - it cannot exceed 100%
+                utilization = min(utilization, 1.0)
+                utilization_percentage = utilization * 100
+                scrap_percentage = (1.0 - utilization) * 100
+                
+                print(f"[Calculate Nesting] Plate {i}: {parts_count} parts, {len(parts_list)} in parts list, utilization: {utilization:.2f}%")
+                if len(parts_list) == 0 and parts_count > 0:
+                    print(f"[Calculate Nesting] WARNING: Plate {i} has {parts_count} parts count but empty parts list!")
+                
+                visualization_layouts.append({
+                    'plate_index': i,
+                    'board': {
+                        'id': str(board_info.get('id', i + 1)),
+                        'width_mm': width_mm,
+                        'height_mm': height_mm
+                    },
+                    'svg': svg_content,
+                    'parts_nested': parts_count,
+                    'utilization': utilization_percentage,  # Return as percentage (0-100)
+                    'scrap_percentage': scrap_percentage,
+                    'nested_parts': parts_list  # Include actual parts data for visualization
+                })
+            
+            # Return result with scrap factor that was sent to API (not calculated locally)
+            return jsonify({
+                'success': True,
+                'scrap_factor': scrap_factor,  # Use the scrap factor sent to API
+                'total_parts_nested': result.get('total_parts_nested', 0),
+                'total_plates_used': plates_used,
+                'total_parts_area_mm2': total_parts_area,
+                'nested_parts_area_mm2': nested_parts_area,
+                'used_board_area_mm2': used_board_area,
+                'scrap_area_mm2': used_board_area - nested_parts_area if used_board_area > 0 else 0,
+                'svg_layouts': visualization_layouts,  # Include SVG layouts for visualization (NOTE: all_svg_layouts was renamed to visualization_layouts)
+                'debug': {
+                    'layouts_count': len(layouts),
+                    'result_keys': list(result.keys()) if result else [],
+                    'scrap_factor_source': 'sent_to_api'
+                }
+            })
+            
+        except Exception as e:
+            import traceback
+            print(f"Error calculating nesting: {traceback.format_exc()}")
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
     
     app.run(debug=True, host='0.0.0.0', port=5000) 
